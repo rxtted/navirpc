@@ -1,0 +1,6 @@
+/navirpc
+token.json
+session.json
+.env
+config.yml
+*.log
