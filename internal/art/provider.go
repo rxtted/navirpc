@@ -7,9 +7,7 @@ type Meta struct {
 	Album   string
 }
 
-// a Provider turns track metadata into a public image url. template providers build
-// the url from metadata (discord fetches it, so any host works); lookup providers make
-// their own outbound call and so must be manifest-allowlisted.
+// if a Resolve makes an outbound call, its host must be in the manifest allowlist.
 type Provider interface {
 	Resolve(Meta) (url string, ok bool)
 }
@@ -17,4 +15,35 @@ type Provider interface {
 type Cache interface {
 	Get(key string) (string, bool)
 	Set(key, val string)
+}
+
+// one enabled provider from user config: its registered name plus its own settings (an
+// api key, a url pattern; nil for providers that need none).
+type ProviderConfig struct {
+	Name     string            `json:"name"`
+	Settings map[string]string `json:"settings,omitempty"`
+}
+
+type factory func(settings map[string]string) (Provider, error)
+
+var registry = map[string]factory{}
+
+// each provider file registers itself here from init(), so a new provider is one new
+// file with no edits anywhere else.
+func register(name string, f factory) { registry[name] = f }
+
+// turns the user's ordered provider configs into a chain, skipping any unknown name or
+// one whose factory rejects its settings.
+func Build(configs []ProviderConfig) []Provider {
+	var ps []Provider
+	for _, c := range configs {
+		f, ok := registry[c.Name]
+		if !ok {
+			continue
+		}
+		if p, err := f(c.Settings); err == nil {
+			ps = append(ps, p)
+		}
+	}
+	return ps
 }
