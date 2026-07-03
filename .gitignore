@@ -4,3 +4,5 @@ session.json
 .env
 config.yml
 *.log
+plugin.wasm
+navirpc.ndp
