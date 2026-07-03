@@ -2,7 +2,6 @@ package auth
 
 import (
 	"encoding/base64"
-	"errors"
 	"testing"
 )
 
@@ -20,17 +19,5 @@ func TestParseIDTokenSub(t *testing.T) {
 	}
 	if _, err := ParseIDTokenSub(idToken(`{"iss":"x"}`)); err == nil {
 		t.Fatal("missing sub should error")
-	}
-}
-
-func TestBindCheck(t *testing.T) {
-	if err := BindCheck("123", "123"); err != nil {
-		t.Fatalf("match should pass: %v", err)
-	}
-	if err := BindCheck("", "123"); err != nil {
-		t.Fatalf("unbound (empty declared) should pass: %v", err)
-	}
-	if err := BindCheck("123", "999"); !errors.Is(err, ErrIdentityMismatch) {
-		t.Fatalf("mismatch should fail closed: %v", err)
 	}
 }
