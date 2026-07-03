@@ -2,7 +2,9 @@ package presence
 
 import "testing"
 
-func act() Activity { return Activity{Type: 2, Name: "ar", Details: "t", State: "al", Start: 100, End: 200} }
+func act() Activity {
+	return Activity{Type: 2, Name: "ar", Details: "t", State: "al", Start: 100, End: 200}
+}
 
 func TestState_PlaySetsDesiredWithEnd(t *testing.T) {
 	s := NewUserState(5000)
