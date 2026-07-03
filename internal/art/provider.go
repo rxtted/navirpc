@@ -28,8 +28,7 @@ type factory func(settings map[string]string) (Provider, error)
 
 var registry = map[string]factory{}
 
-// each provider file registers itself here from init(), so a new provider is one new
-// file with no edits anywhere else.
+// each provider file registers itself here from init().
 func register(name string, f factory) { registry[name] = f }
 
 // turns the user's ordered provider configs into a chain, skipping any unknown name or

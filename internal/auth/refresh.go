@@ -13,11 +13,8 @@ type Refresher interface {
 	Refresh(clientID, refreshToken string) (access, newRefresh string, expiresIn int64, err error)
 }
 
-// the single refresh call site (single-owner: only the reconciler calls it). when the
-// access token is stale it refreshes, persists the rotated refresh token BEFORE handing
-// back the new access token (write-before-use), and marks the token dead on invalid_grant.
-// a persist failure returns an error rather than an unpersisted token, so the next tick
-// retries from stored state instead of stranding the account on a rotated-away token.
+// persist the rotated refresh token before using the new access token; discord
+// invalidates the old refresh on use, so a save that lands late would strand the account.
 func EnsureFresh(userID string, store TokenStore, rf Refresher, now int64) (Stored, error) {
 	cur, ok := store.Load(userID)
 	if !ok {

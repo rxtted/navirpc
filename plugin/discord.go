@@ -1,0 +1,131 @@
+//go:build wasip1
+
+package main
+
+import (
+	"encoding/json"
+	"errors"
+	"net/url"
+	"strconv"
+
+	"github.com/navidrome/navidrome/plugins/pdk/go/host"
+	"github.com/rxtted/navirpc/internal/auth"
+	"github.com/rxtted/navirpc/internal/presence"
+)
+
+const apiBase = "https://discord.com/api/v10"
+
+// discord is behind cloudflare, which 1010-blocks a default http agent.
+const userAgent = "Mozilla/5.0 navirpc/0.1"
+
+type discordRefresher struct{}
+
+func (discordRefresher) Refresh(clientID, refreshToken string) (access, newRefresh string, expiresIn int64, err error) {
+	form := url.Values{"grant_type": {"refresh_token"}, "client_id": {clientID}, "refresh_token": {refreshToken}}
+	resp, err := host.HTTPSend(host.HTTPRequest{
+		Method:    "POST",
+		URL:       apiBase + "/oauth2/token",
+		Headers:   map[string]string{"Content-Type": "application/x-www-form-urlencoded", "User-Agent": userAgent},
+		Body:      []byte(form.Encode()),
+		TimeoutMs: 10000,
+	})
+	if err != nil {
+		return "", "", 0, err
+	}
+	if resp.StatusCode == 400 {
+		return "", "", 0, auth.ErrInvalidGrant
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", "", 0, errors.New("token refresh http " + strconv.Itoa(int(resp.StatusCode)))
+	}
+	var out struct {
+		Access    string `json:"access_token"`
+		Refresh   string `json:"refresh_token"`
+		ExpiresIn int64  `json:"expires_in"`
+	}
+	if err := json.Unmarshal(resp.Body, &out); err != nil {
+		return "", "", 0, err
+	}
+	return out.Access, out.Refresh, out.ExpiresIn, nil
+}
+
+// discordPublisher implements presence.Publisher, resolving each user's access token
+// from the kv-store (the reconciler refreshes it before calling here).
+type discordPublisher struct{}
+
+func (discordPublisher) Publish(username string, d presence.Desired) (string, error) {
+	s, ok := kvStore{}.Load(username)
+	if !ok || s.Access == "" {
+		return "", errors.New("no access token for " + username)
+	}
+	body, _ := json.Marshal(map[string]any{"activities": []discordActivity{toDiscordActivity(d.Act, s.ClientID)}})
+	resp, err := discordPost("/users/@me/headless-sessions", s.Access, body)
+	if err != nil {
+		return "", err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", errors.New("headless-session http " + strconv.Itoa(int(resp.StatusCode)))
+	}
+	var out struct {
+		Token string `json:"token"`
+	}
+	json.Unmarshal(resp.Body, &out)
+	return out.Token, nil
+}
+
+func (discordPublisher) Clear(username, sessionToken string) error {
+	if sessionToken == "" {
+		return nil
+	}
+	s, ok := kvStore{}.Load(username)
+	if !ok || s.Access == "" {
+		return nil
+	}
+	body, _ := json.Marshal(map[string]string{"token": sessionToken})
+	_, err := discordPost("/users/@me/headless-sessions/delete", s.Access, body)
+	return err
+}
+
+func discordPost(path, bearer string, body []byte) (*host.HTTPResponse, error) {
+	return host.HTTPSend(host.HTTPRequest{
+		Method:    "POST",
+		URL:       apiBase + path,
+		Headers:   map[string]string{"Content-Type": "application/json", "Authorization": "Bearer " + bearer, "User-Agent": userAgent},
+		Body:      body,
+		TimeoutMs: 10000,
+	})
+}
+
+type discordActivity struct {
+	Type          int                `json:"type"`
+	Name          string             `json:"name"`
+	Platform      string             `json:"platform"`
+	ApplicationID string             `json:"application_id,omitempty"`
+	Details       string             `json:"details,omitempty"`
+	State         string             `json:"state,omitempty"`
+	Timestamps    *discordTimestamps `json:"timestamps,omitempty"`
+	Assets        *discordAssets     `json:"assets,omitempty"`
+}
+
+type discordTimestamps struct {
+	Start int64 `json:"start,omitempty"`
+	End   int64 `json:"end,omitempty"`
+}
+
+type discordAssets struct {
+	LargeImage string `json:"large_image,omitempty"`
+}
+
+func toDiscordActivity(a presence.Activity, clientID string) discordActivity {
+	da := discordActivity{
+		Type: a.Type, Name: a.Name, Platform: a.Platform, ApplicationID: clientID,
+		Details: a.Details, State: a.State,
+	}
+	if a.Start != 0 || a.End != 0 {
+		da.Timestamps = &discordTimestamps{Start: a.Start, End: a.End}
+	}
+	if a.LargeImage != "" {
+		da.Assets = &discordAssets{LargeImage: a.LargeImage}
+	}
+	return da
+}

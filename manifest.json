@@ -5,7 +5,9 @@
   "version": "0.0.1",
   "description": "Discord rich presence from Navidrome",
   "permissions": {
-    "users": { "reason": "To set presence on behalf of Navidrome users" }
+    "users": { "reason": "To set presence on behalf of Navidrome users" },
+    "http": { "reason": "To set presence and refresh tokens with Discord", "requiredHosts": ["discord.com"] },
+    "kvstore": { "reason": "To persist each user's Discord token and session" }
   },
   "config": {
     "schema": {

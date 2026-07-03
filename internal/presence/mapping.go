@@ -24,7 +24,7 @@ type Prefs struct {
 	Header string // "artist" | "album" | "track" | any fixed string
 }
 
-// position and now are unix-ms so start anchors the progress bar to the real position.
+// position and now are unix-ms.
 func Map(t Track, prefs Prefs, positionMs, nowMs int64) Activity {
 	start := nowMs - positionMs
 	return Activity{

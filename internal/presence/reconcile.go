@@ -12,10 +12,7 @@ type PubState struct {
 	Fails        int
 }
 
-// publishes desired state to discord, newer-event-wins: a desired whose seq is not
-// ahead of what's published is dropped, and a publish failure backs off (tracked in
-// the returned state, not by sleeping) so the next tick retries. the caller persists
-// the returned state.
+// newer-event-wins. the caller persists the returned state (published seq, backoff, session token).
 func Reconcile(userID string, d Desired, ps PubState, pub Publisher, nowMs int64) (PubState, error) {
 	if d.Seq <= ps.PublishedSeq || nowMs < ps.BackoffUntil {
 		return ps, nil
