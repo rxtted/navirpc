@@ -53,8 +53,8 @@
         },
         "client_id": {
           "type": "string",
-          "title": "Own Discord app client ID",
-          "description": "Leave blank to use the shared app. Set this only if you run your own Discord application, it must match the app the connect page authorized against."
+          "title": "Client ID",
+          "description": "Set this only if you run your own Discord application, otherwise leave blank to use the default app. It must be the same client ID you authorized with on the connect page, since the token is bound to that app."
         }
       }
     }
