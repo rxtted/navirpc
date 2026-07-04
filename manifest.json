@@ -6,7 +6,7 @@
   "description": "Discord rich presence from Navidrome",
   "permissions": {
     "users": { "reason": "To set presence on behalf of Navidrome users" },
-    "http": { "reason": "To set presence and refresh tokens with Discord", "requiredHosts": ["discord.com"] },
+    "http": { "reason": "To set presence and refresh tokens with Discord, and look up album art", "requiredHosts": ["discord.com", "itunes.apple.com"] },
     "kvstore": { "reason": "To persist each user's Discord token and session" },
     "scheduler": { "reason": "To keep the presence session alive on long tracks" }
   },
@@ -25,6 +25,13 @@
               "token": { "type": "string", "title": "Config value from the connect page" }
             }
           }
+        },
+        "art_providers": {
+          "type": "array",
+          "title": "Album art providers",
+          "description": "Ordered art sources, the first match wins. Remove one to disable it, reorder for priority, or leave the list empty for no art.",
+          "items": { "type": "string", "enum": ["coverartarchive", "itunes"] },
+          "default": ["coverartarchive", "itunes"]
         }
       }
     }

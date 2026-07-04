@@ -18,7 +18,7 @@ func init() {
 // resolves only when every placeholder it uses has a value.
 type Template struct{ Pattern string }
 
-func (t Template) Resolve(m Meta) (string, bool) {
+func (t Template) Resolve(m Meta, _ Getter) (string, bool) {
 	if t.Pattern == "" {
 		return "", false
 	}

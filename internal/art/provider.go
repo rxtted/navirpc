@@ -7,9 +7,14 @@ type Meta struct {
 	Album   string
 }
 
-// if a Resolve makes an outbound call, its host must be in the manifest allowlist.
+// the outbound http a lookup provider uses to resolve art, template providers ignore it.
+// any host a lookup provider fetches must be in the manifest allowlist.
+type Getter interface {
+	Get(url string) (body []byte, status int, err error)
+}
+
 type Provider interface {
-	Resolve(Meta) (url string, ok bool)
+	Resolve(Meta, Getter) (url string, ok bool)
 }
 
 type Cache interface {

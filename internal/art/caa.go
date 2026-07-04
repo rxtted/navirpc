@@ -7,7 +7,7 @@ func init() {
 // the default provider when art is on, Cover Art Archive by release-group mbid.
 type CAA struct{}
 
-func (CAA) Resolve(m Meta) (string, bool) {
+func (CAA) Resolve(m Meta, _ Getter) (string, bool) {
 	if m.RGID == "" {
 		return "", false
 	}

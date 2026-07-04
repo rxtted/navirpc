@@ -11,6 +11,7 @@ import (
 	"github.com/navidrome/navidrome/plugins/pdk/go/pdk"
 	"github.com/navidrome/navidrome/plugins/pdk/go/scheduler"
 	"github.com/navidrome/navidrome/plugins/pdk/go/scrobbler"
+	"github.com/rxtted/navirpc/internal/art"
 	"github.com/rxtted/navirpc/internal/auth"
 	"github.com/rxtted/navirpc/internal/presence"
 )
@@ -96,12 +97,20 @@ func seedFrom(token string) string {
 
 func (plugin) PlaybackReport(r scrobbler.PlaybackReportRequest) error {
 	nowMs := time.Now().UnixMilli()
-	us := presence.RestoreUserState(clearDebounceMs, loadSnapshot(r.Username))
+	snap := loadSnapshot(r.Username)
+	us := presence.RestoreUserState(clearDebounceMs, snap)
 
 	var desired presence.Desired
 	switch r.State {
 	case "playing", "starting":
-		act := presence.Map(track(r), presence.Prefs{Header: "artist"}, r.PositionMs, nowMs)
+		tk := track(r)
+		act := presence.Map(tk, presence.Prefs{Header: "artist"}, r.PositionMs, nowMs)
+		// resolve art only on an album change, reuse the current cover otherwise
+		if tk.Album != "" && tk.Album == snap.LastAct.State && snap.LastAct.LargeImage != "" {
+			act.LargeImage = snap.LastAct.LargeImage
+		} else {
+			act.LargeImage = resolveArt(tk)
+		}
 		desired, _ = us.OnReport(r.State, act, nowMs)
 	case "paused", "stopped", "expired":
 		us.OnReport(r.State, presence.Activity{}, nowMs)
@@ -161,6 +170,33 @@ func track(r scrobbler.PlaybackReportRequest) presence.Track {
 		RGID: r.Track.MBZReleaseGroupID, AlbumID: r.Track.MBZAlbumID,
 		DurationMs: int64(r.Track.Duration * 1000),
 	}
+}
+
+func resolveArt(t presence.Track) string {
+	providers := art.Build(configuredArtProviders())
+	url, _ := art.Chain(providers, nil, art.Meta{RGID: t.RGID, AlbumID: t.AlbumID, Artist: t.Artist, Album: t.Album}, httpGetter{})
+	return url
+}
+
+// the ordered art provider chain from config. navidrome doesn't apply schema defaults to
+// what a plugin reads, so this default mirrors the manifest schema default and the two
+// must stay in sync. a user drops a provider to disable it, reorders it, or empties the
+// list for no art.
+func configuredArtProviders() []art.ProviderConfig {
+	def := []art.ProviderConfig{{Name: "coverartarchive"}, {Name: "itunes"}}
+	raw, ok := pdk.GetConfig("art_providers")
+	if !ok || raw == "" {
+		return def
+	}
+	var names []string
+	if json.Unmarshal([]byte(raw), &names) != nil {
+		return def
+	}
+	cfgs := make([]art.ProviderConfig, 0, len(names))
+	for _, n := range names {
+		cfgs = append(cfgs, art.ProviderConfig{Name: n})
+	}
+	return cfgs
 }
 
 func (plugin) IsAuthorized(r scrobbler.IsAuthorizedRequest) (bool, error) {

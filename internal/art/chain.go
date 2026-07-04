@@ -2,10 +2,13 @@ package art
 
 // resolves the first provider that hits, caching the result per album including
 // misses, so a coverless album isn't re-resolved on every track.
-func Chain(ps []Provider, cache Cache, m Meta) (string, bool) {
+func Chain(ps []Provider, cache Cache, m Meta, get Getter) (string, bool) {
 	key := m.AlbumID
 	if key == "" {
 		key = m.RGID
+	}
+	if key == "" {
+		key = m.Artist + " - " + m.Album
 	}
 	if key != "" && cache != nil {
 		if v, ok := cache.Get(key); ok {
@@ -13,7 +16,7 @@ func Chain(ps []Provider, cache Cache, m Meta) (string, bool) {
 		}
 	}
 	for _, p := range ps {
-		if url, ok := p.Resolve(m); ok {
+		if url, ok := p.Resolve(m, get); ok {
 			cacheSet(cache, key, url)
 			return url, true
 		}

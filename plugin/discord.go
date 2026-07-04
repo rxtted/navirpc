@@ -97,6 +97,22 @@ func (discordPublisher) Clear(username, sessionToken string) error {
 	return err
 }
 
+// httpGetter is art.Getter over the host client for lookup providers.
+type httpGetter struct{}
+
+func (httpGetter) Get(url string) ([]byte, int, error) {
+	resp, err := host.HTTPSend(host.HTTPRequest{
+		Method:    "GET",
+		URL:       url,
+		Headers:   map[string]string{"User-Agent": userAgent},
+		TimeoutMs: 10000,
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	return resp.Body, int(resp.StatusCode), nil
+}
+
 func discordPost(path, bearer string, body []byte) (*host.HTTPResponse, error) {
 	return host.HTTPSend(host.HTTPRequest{
 		Method:    "POST",
