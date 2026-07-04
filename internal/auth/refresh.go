@@ -13,7 +13,7 @@ type Refresher interface {
 	Refresh(clientID, refreshToken string) (access, newRefresh string, expiresIn int64, err error)
 }
 
-// persist the rotated refresh token before using the new access token; discord
+// persist the rotated refresh token before using the new access token. discord
 // invalidates the old refresh on use, so a save that lands late would strand the account.
 func EnsureFresh(userID string, store TokenStore, rf Refresher, now int64) (Stored, error) {
 	cur, ok := store.Load(userID)

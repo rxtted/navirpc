@@ -33,8 +33,8 @@ func (kvStore) Save(username string, s auth.Stored) error {
 	return host.KVStoreSet("token:"+username, b)
 }
 
-// per-user state is split by owner: playback: is the report path's snapshot (only it
-// writes it), presence: is the shared publish state the scheduler tick also updates.
+// per-user state is split by owner. the playback key is the report path's snapshot, only
+// it writes it, the presence key is the shared publish state the scheduler tick also updates.
 // keeping them separate is what lets the tick run without a lock, see the spec.
 
 func loadSnapshot(username string) presence.Snapshot {

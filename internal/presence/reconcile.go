@@ -30,9 +30,11 @@ type PubState struct {
 	Fails         int
 }
 
-// newer-event-wins. the caller persists the returned state (published seq, backoff, session token).
+// newer-event-wins. the caller persists the returned state, published seq, backoff, session token.
 func Reconcile(userID string, d Desired, ps PubState, pub Publisher, nowMs int64) (PubState, error) {
-	if nowMs < ps.BackoffUntil {
+	// a clear is exempt from backoff, as it is from the throttle, so a stop is never left
+	// stuck behind a transient publish failure showing a stale card.
+	if d.Kind != "clear" && nowMs < ps.BackoffUntil {
 		return ps, nil
 	}
 	keepaliveDue := d.Kind != "clear" && ps.SessionToken != "" && ps.LastPublishMs != 0 && nowMs-ps.LastPublishMs >= keepaliveMs
@@ -40,7 +42,7 @@ func Reconcile(userID string, d Desired, ps PubState, pub Publisher, nowMs int64
 		return ps, nil
 	}
 
-	// throttle publishes to the rate window; clears are exempt so a stop is never stuck
+	// throttle publishes to the rate window. clears are exempt so a stop is never stuck
 	// behind the throttle. a throttled publish is retried by a later report.
 	ps.PublishTimes = recentTimes(ps.PublishTimes, nowMs-rateWindowMs)
 	if d.Kind != "clear" && len(ps.PublishTimes) >= rateMax {

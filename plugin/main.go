@@ -17,11 +17,11 @@ import (
 
 const centralClientID = "1522831068774924308"
 
-// clear the card as soon as playback stops; there's no timer to fire a deferred clear.
+// clear the card as soon as playback stops, there's no timer to fire a deferred clear.
 const clearDebounceMs = 0
 
-// keepalive/flush tick: well under the 20-min session TTL, frequent enough to resync a
-// throttled scrub within the rate window.
+// keepalive and flush tick, well under the 20-min session TTL, frequent enough to
+// resync a throttled scrub within the rate window.
 const tickCron = "@every 15s"
 
 type plugin struct{}
@@ -68,10 +68,12 @@ func (plugin) OnInit() error {
 			cur = &s
 		}
 		next := auth.Reconcile(seed, clientID, "", cur)
-		// write only on a real seed change, so a reload can't clobber a token the report
-		// path just rotated on the other goroutine
-		if cur == nil || cur.Seed != seed {
-			store.Save(u.Username, *next)
+		// write only on a real config change of seed or client_id, so a reload can't clobber
+		// a token the report path just rotated on the other goroutine
+		if cur == nil || cur.Seed != seed || cur.ClientID != clientID {
+			if err := store.Save(u.Username, *next); err != nil {
+				pdk.Log(pdk.LogWarn, "navirpc: could not persist token for "+u.Username+": "+err.Error())
+			}
 		}
 		clearState(u.Username) // drop stale playback/presence so the first report starts fresh
 	}
@@ -124,8 +126,9 @@ func (plugin) PlaybackReport(r scrobbler.PlaybackReportRequest) error {
 	return nil
 }
 
-// the scheduler tick: keepalive + flush per active user, using the stored access token
-// (it never refreshes, so token: stays single-owner) and writing only presence:.
+// the scheduler tick, keepalive and flush per active user, using the stored access
+// token. it never refreshes so the token key stays single-owner, and it writes only
+// the presence key.
 func (plugin) OnCallback(scheduler.SchedulerCallbackRequest) error {
 	nowMs := time.Now().UnixMilli()
 	nowUnix := time.Now().Unix()
@@ -136,10 +139,14 @@ func (plugin) OnCallback(scheduler.SchedulerCallbackRequest) error {
 		}
 		s, ok := kvStore{}.Load(u.Username)
 		if !ok || s.Dead || auth.NeedsRefresh(s, nowUnix) {
-			continue // no usable access token; the report path refreshes on the next action
+			continue // no usable access token, the report path refreshes on the next action
+		}
+		ps := loadPresence(u.Username)
+		if ps.SessionToken == "" {
+			continue // no established session to keep alive, only the report path creates one
 		}
 		desired := presence.Desired{Seq: snap.Seq, Kind: snap.LastKind, Act: snap.LastAct}
-		ps, err := presence.Reconcile(u.Username, desired, loadPresence(u.Username), discordPublisher{}, nowMs)
+		ps, err := presence.Reconcile(u.Username, desired, ps, discordPublisher{}, nowMs)
 		if err != nil {
 			pdk.Log(pdk.LogWarn, "navirpc: tick for "+u.Username+" failed: "+err.Error())
 		}

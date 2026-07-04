@@ -4,7 +4,7 @@ func init() {
 	register("coverartarchive", func(map[string]string) (Provider, error) { return CAA{}, nil })
 }
 
-// the default provider when art is on: Cover Art Archive by release-group mbid.
+// the default provider when art is on, Cover Art Archive by release-group mbid.
 type CAA struct{}
 
 func (CAA) Resolve(m Meta) (string, bool) {

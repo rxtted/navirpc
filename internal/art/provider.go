@@ -17,8 +17,8 @@ type Cache interface {
 	Set(key, val string)
 }
 
-// one enabled provider from user config: its registered name plus its own settings (an
-// api key, a url pattern; nil for providers that need none).
+// one enabled provider from user config, its registered name plus its own settings, an
+// api key or a url pattern, nil for providers that need none.
 type ProviderConfig struct {
 	Name     string            `json:"name"`
 	Settings map[string]string `json:"settings,omitempty"`
@@ -28,7 +28,7 @@ type factory func(settings map[string]string) (Provider, error)
 
 var registry = map[string]factory{}
 
-// each provider file registers itself here from init().
+// each provider file registers itself here from its init function.
 func register(name string, f factory) { registry[name] = f }
 
 // turns the user's ordered provider configs into a chain, skipping any unknown name or

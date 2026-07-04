@@ -14,7 +14,7 @@ func init() {
 	})
 }
 
-// a user-supplied url pattern with {rgid} {albumid} {artist} {album} placeholders;
+// a user-supplied url pattern with {rgid} {albumid} {artist} {album} placeholders.
 // resolves only when every placeholder it uses has a value.
 type Template struct{ Pattern string }
 

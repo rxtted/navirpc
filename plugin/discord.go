@@ -51,7 +51,7 @@ func (discordRefresher) Refresh(clientID, refreshToken string) (access, newRefre
 }
 
 // discordPublisher implements presence.Publisher, resolving each user's access token
-// from the kv-store (the reconciler refreshes it before calling here).
+// from the kv-store where the reconciler refreshes it before calling here.
 type discordPublisher struct{}
 
 func (discordPublisher) Publish(username string, d presence.Desired, sessionToken string) (string, error) {

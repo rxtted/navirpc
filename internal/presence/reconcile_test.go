@@ -135,3 +135,11 @@ func TestReconcile_SkipsDuringBackoff(t *testing.T) {
 		t.Fatalf("should skip while backing off: pub=%+v", pub)
 	}
 }
+
+func TestReconcile_ClearBypassesBackoff(t *testing.T) {
+	pub := &fakePub{}
+	Reconcile("u", Desired{Seq: 6, Kind: "clear"}, PubState{PublishedSeq: 5, SessionToken: "sess", BackoffUntil: 9000}, pub, 1000)
+	if len(pub.cleared) != 1 {
+		t.Fatalf("a clear must bypass backoff and still attempt: %+v", pub.cleared)
+	}
+}

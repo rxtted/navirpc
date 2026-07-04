@@ -1,7 +1,7 @@
 package art
 
-// resolves the first provider that hits, caching the result per album (misses too,
-// so a coverless album isn't re-resolved on every track).
+// resolves the first provider that hits, caching the result per album including
+// misses, so a coverless album isn't re-resolved on every track.
 func Chain(ps []Provider, cache Cache, m Meta) (string, bool) {
 	key := m.AlbumID
 	if key == "" {
