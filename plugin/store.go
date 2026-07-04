@@ -7,13 +7,14 @@ import (
 
 	"github.com/navidrome/navidrome/plugins/pdk/go/host"
 	"github.com/rxtted/navirpc/internal/auth"
+	"github.com/rxtted/navirpc/internal/presence"
 )
 
 // kvStore adapts navidrome's kv-store to auth.TokenStore, keyed per navidrome user.
 type kvStore struct{}
 
 func (kvStore) Load(username string) (auth.Stored, bool) {
-	b, ok, err := host.KVStoreGet("tok:" + username)
+	b, ok, err := host.KVStoreGet("token:" + username)
 	if err != nil || !ok {
 		return auth.Stored{}, false
 	}
@@ -29,16 +30,42 @@ func (kvStore) Save(username string, s auth.Stored) error {
 	if err != nil {
 		return err
 	}
-	return host.KVStoreSet("tok:"+username, b)
+	return host.KVStoreSet("token:"+username, b)
 }
 
-func loadSession(username string) string {
-	b, ok, err := host.KVStoreGet("sess:" + username)
-	if err != nil || !ok {
-		return ""
+// per-user state is split by owner: playback: is the report path's snapshot (only it
+// writes it), presence: is the shared publish state the scheduler tick also updates.
+// keeping them separate is what lets the tick run without a lock, see the spec.
+
+func loadSnapshot(username string) presence.Snapshot {
+	var snap presence.Snapshot
+	if b, ok, err := host.KVStoreGet("playback:" + username); err == nil && ok {
+		json.Unmarshal(b, &snap)
 	}
-	return string(b)
+	return snap
 }
 
-func saveSession(username, token string) { _ = host.KVStoreSet("sess:"+username, []byte(token)) }
-func clearSession(username string)       { _ = host.KVStoreDelete("sess:" + username) }
+func saveSnapshot(username string, snap presence.Snapshot) {
+	if b, err := json.Marshal(snap); err == nil {
+		_ = host.KVStoreSet("playback:"+username, b)
+	}
+}
+
+func loadPresence(username string) presence.PubState {
+	var ps presence.PubState
+	if b, ok, err := host.KVStoreGet("presence:" + username); err == nil && ok {
+		json.Unmarshal(b, &ps)
+	}
+	return ps
+}
+
+func savePresence(username string, ps presence.PubState) {
+	if b, err := json.Marshal(ps); err == nil {
+		_ = host.KVStoreSet("presence:"+username, b)
+	}
+}
+
+func clearState(username string) {
+	_ = host.KVStoreDelete("playback:" + username)
+	_ = host.KVStoreDelete("presence:" + username)
+}

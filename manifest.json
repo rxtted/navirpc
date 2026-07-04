@@ -7,7 +7,8 @@
   "permissions": {
     "users": { "reason": "To set presence on behalf of Navidrome users" },
     "http": { "reason": "To set presence and refresh tokens with Discord", "requiredHosts": ["discord.com"] },
-    "kvstore": { "reason": "To persist each user's Discord token and session" }
+    "kvstore": { "reason": "To persist each user's Discord token and session" },
+    "scheduler": { "reason": "To keep the presence session alive on long tracks" }
   },
   "config": {
     "schema": {

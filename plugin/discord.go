@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/navidrome/navidrome/plugins/pdk/go/host"
 	"github.com/rxtted/navirpc/internal/auth"
@@ -53,15 +54,22 @@ func (discordRefresher) Refresh(clientID, refreshToken string) (access, newRefre
 // from the kv-store (the reconciler refreshes it before calling here).
 type discordPublisher struct{}
 
-func (discordPublisher) Publish(username string, d presence.Desired) (string, error) {
+func (discordPublisher) Publish(username string, d presence.Desired, sessionToken string) (string, error) {
 	s, ok := kvStore{}.Load(username)
 	if !ok || s.Access == "" {
 		return "", errors.New("no access token for " + username)
 	}
-	body, _ := json.Marshal(map[string]any{"activities": []discordActivity{toDiscordActivity(d.Act, s.ClientID)}})
+	payload := map[string]any{"activities": []discordActivity{toDiscordActivity(d.Act, s.ClientID)}}
+	if sessionToken != "" {
+		payload["token"] = sessionToken // update the existing session rather than create a new one
+	}
+	body, _ := json.Marshal(payload)
 	resp, err := discordPost("/users/@me/headless-sessions", s.Access, body)
 	if err != nil {
 		return "", err
+	}
+	if resp.StatusCode == 429 {
+		return "", rateLimited{ms: retryAfterMs(resp.Headers)}
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return "", errors.New("headless-session http " + strconv.Itoa(int(resp.StatusCode)))
@@ -70,7 +78,10 @@ func (discordPublisher) Publish(username string, d presence.Desired) (string, er
 		Token string `json:"token"`
 	}
 	json.Unmarshal(resp.Body, &out)
-	return out.Token, nil
+	if out.Token != "" {
+		return out.Token, nil
+	}
+	return sessionToken, nil
 }
 
 func (discordPublisher) Clear(username, sessionToken string) error {
@@ -128,4 +139,32 @@ func toDiscordActivity(a presence.Activity, clientID string) discordActivity {
 		da.Assets = &discordAssets{LargeImage: a.LargeImage}
 	}
 	return da
+}
+
+// rateLimited carries discord's retry window so the reconciler backs off by exactly that.
+type rateLimited struct{ ms int64 }
+
+func (e rateLimited) Error() string {
+	return "headless-session rate limited, retry in " + strconv.FormatInt(e.ms, 10) + "ms"
+}
+func (e rateLimited) RetryAfterMs() int64 { return e.ms }
+
+func retryAfterMs(h map[string]string) int64 {
+	for _, k := range []string{"Retry-After", "X-RateLimit-Reset-After"} {
+		if v := headerGet(h, k); v != "" {
+			if f, err := strconv.ParseFloat(v, 64); err == nil && f > 0 {
+				return int64(f * 1000)
+			}
+		}
+	}
+	return 2000
+}
+
+func headerGet(h map[string]string, key string) string {
+	for k, v := range h {
+		if strings.EqualFold(k, key) {
+			return v
+		}
+	}
+	return ""
 }

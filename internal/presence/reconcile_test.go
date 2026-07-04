@@ -6,14 +6,16 @@ import (
 )
 
 type fakePub struct {
-	published []Desired
-	cleared   []string
-	session   string
-	err       error
+	published  []Desired
+	gotSession []string
+	cleared    []string
+	session    string
+	err        error
 }
 
-func (f *fakePub) Publish(_ string, d Desired) (string, error) {
+func (f *fakePub) Publish(_ string, d Desired, sessionToken string) (string, error) {
 	f.published = append(f.published, d)
+	f.gotSession = append(f.gotSession, sessionToken)
 	return f.session, f.err
 }
 func (f *fakePub) Clear(_, sessionToken string) error {
@@ -37,6 +39,38 @@ func TestReconcile_DropsStale(t *testing.T) {
 	}
 }
 
+func TestReconcile_PublishUsesExistingSession(t *testing.T) {
+	pub := &fakePub{session: "new"}
+	ps, _ := Reconcile("u", Desired{Seq: 6, Kind: "play"}, PubState{PublishedSeq: 5, SessionToken: "old"}, pub, 1000)
+	if len(pub.gotSession) != 1 || pub.gotSession[0] != "old" {
+		t.Fatalf("publish should pass the existing session token (update, not create): %+v", pub.gotSession)
+	}
+	if ps.SessionToken != "new" {
+		t.Fatalf("session token should become the returned one: ps=%+v", ps)
+	}
+}
+
+func TestReconcile_KeepaliveRepublishesUnchanged(t *testing.T) {
+	pub := &fakePub{session: "sess"}
+	ps, _ := Reconcile("u", Desired{Seq: 5, Kind: "play"},
+		PubState{PublishedSeq: 5, SessionToken: "sess", LastPublishMs: 1000}, pub, 1000+keepaliveMs)
+	if len(pub.published) != 1 {
+		t.Fatalf("keepalive should re-publish an unchanged session: %+v", pub.published)
+	}
+	if ps.LastPublishMs != 1000+keepaliveMs {
+		t.Fatalf("keepalive should reset LastPublishMs: ps=%+v", ps)
+	}
+}
+
+func TestReconcile_NoKeepaliveWithinWindow(t *testing.T) {
+	pub := &fakePub{session: "sess"}
+	ps, _ := Reconcile("u", Desired{Seq: 5, Kind: "play"},
+		PubState{PublishedSeq: 5, SessionToken: "sess", LastPublishMs: 1000}, pub, 2000)
+	if len(pub.published) != 0 || ps.PublishedSeq != 5 {
+		t.Fatalf("no keepalive within the window: pub=%+v", pub)
+	}
+}
+
 func TestReconcile_ClearUsesSessionToken(t *testing.T) {
 	pub := &fakePub{}
 	ps, err := Reconcile("u", Desired{Seq: 6, Kind: "clear"}, PubState{PublishedSeq: 5, SessionToken: "sess"}, pub, 1000)
@@ -50,6 +84,47 @@ func TestReconcile_PublishErrorBacksOff(t *testing.T) {
 	ps, err := Reconcile("u", Desired{Seq: 5, Kind: "play"}, PubState{PublishedSeq: 2}, pub, 1000)
 	if err == nil || ps.PublishedSeq != 2 || ps.BackoffUntil <= 1000 {
 		t.Fatalf("publish error should back off and not advance seq: ps=%+v err=%v", ps, err)
+	}
+}
+
+func TestReconcile_ThrottlesBurst(t *testing.T) {
+	pub := &fakePub{session: "s"}
+	ps := PubState{}
+	var seq int64
+	for i := 0; i < rateMax; i++ {
+		seq++
+		ps, _ = Reconcile("u", Desired{Seq: seq, Kind: "play"}, ps, pub, 1000)
+	}
+	if len(pub.published) != rateMax {
+		t.Fatalf("first %d in the window should publish, got %d", rateMax, len(pub.published))
+	}
+	seq++
+	ps, _ = Reconcile("u", Desired{Seq: seq, Kind: "play"}, ps, pub, 1000)
+	if len(pub.published) != rateMax {
+		t.Fatalf("a publish past the window cap should be throttled: %d", len(pub.published))
+	}
+	seq++
+	ps, _ = Reconcile("u", Desired{Seq: seq, Kind: "clear"}, ps, pub, 1000)
+	if len(pub.cleared) != 1 {
+		t.Fatalf("clear should be exempt from the throttle: %+v", pub.cleared)
+	}
+	seq++
+	Reconcile("u", Desired{Seq: seq, Kind: "play"}, ps, pub, 1000+rateWindowMs+1)
+	if len(pub.published) != rateMax+1 {
+		t.Fatalf("publishing resumes after the window ages out: %d", len(pub.published))
+	}
+}
+
+type retryErr struct{ ms int64 }
+
+func (e retryErr) Error() string       { return "rate limited" }
+func (e retryErr) RetryAfterMs() int64 { return e.ms }
+
+func TestReconcile_HonorsRetryAfter(t *testing.T) {
+	pub := &fakePub{err: retryErr{ms: 1500}}
+	ps, err := Reconcile("u", Desired{Seq: 5, Kind: "play"}, PubState{PublishedSeq: 2}, pub, 1000)
+	if err == nil || ps.BackoffUntil != 1000+1500 {
+		t.Fatalf("should back off by the retry-after window, not the generic backoff: ps=%+v err=%v", ps, err)
 	}
 }
 

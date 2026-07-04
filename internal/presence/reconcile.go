@@ -1,20 +1,49 @@
 package presence
 
+import "errors"
+
+// re-publish an unchanged session at least this often so its 20-minute discord TTL never
+// lapses during steady playback.
+const keepaliveMs = 15 * 60 * 1000
+
+// discord's headless-session bucket is 5 requests / 20s. stay a step under it and coalesce
+// the rest, so a scrub burst never trips a 429.
+const (
+	rateWindowMs = 20000
+	rateMax      = 4
+)
+
+// a Publish error may carry discord's rate-limit window, honoured over the generic backoff.
+type retryAfterErr interface{ RetryAfterMs() int64 }
+
 type Publisher interface {
-	Publish(userID string, d Desired) (sessionToken string, err error)
+	Publish(userID string, d Desired, sessionToken string) (newSessionToken string, err error)
 	Clear(userID, sessionToken string) error
 }
 
 type PubState struct {
-	PublishedSeq int64
-	SessionToken string
-	BackoffUntil int64
-	Fails        int
+	PublishedSeq  int64
+	SessionToken  string
+	LastPublishMs int64
+	PublishTimes  []int64 // recent publish timestamps, for the rate window
+	BackoffUntil  int64
+	Fails         int
 }
 
 // newer-event-wins. the caller persists the returned state (published seq, backoff, session token).
 func Reconcile(userID string, d Desired, ps PubState, pub Publisher, nowMs int64) (PubState, error) {
-	if d.Seq <= ps.PublishedSeq || nowMs < ps.BackoffUntil {
+	if nowMs < ps.BackoffUntil {
+		return ps, nil
+	}
+	keepaliveDue := d.Kind != "clear" && ps.SessionToken != "" && ps.LastPublishMs != 0 && nowMs-ps.LastPublishMs >= keepaliveMs
+	if d.Seq <= ps.PublishedSeq && !keepaliveDue {
+		return ps, nil
+	}
+
+	// throttle publishes to the rate window; clears are exempt so a stop is never stuck
+	// behind the throttle. a throttled publish is retried by a later report.
+	ps.PublishTimes = recentTimes(ps.PublishTimes, nowMs-rateWindowMs)
+	if d.Kind != "clear" && len(ps.PublishTimes) >= rateMax {
 		return ps, nil
 	}
 
@@ -25,23 +54,42 @@ func Reconcile(userID string, d Desired, ps PubState, pub Publisher, nowMs int64
 	if d.Kind == "clear" {
 		err = pub.Clear(userID, ps.SessionToken)
 	} else {
-		session, err = pub.Publish(userID, d)
+		session, err = pub.Publish(userID, d, ps.SessionToken)
 	}
 	if err != nil {
 		ps.Fails++
-		ps.BackoffUntil = nowMs + backoffMs(ps.Fails)
+		var ra retryAfterErr
+		if errors.As(err, &ra) && ra.RetryAfterMs() > 0 {
+			ps.BackoffUntil = nowMs + ra.RetryAfterMs()
+		} else {
+			ps.BackoffUntil = nowMs + backoffMs(ps.Fails)
+		}
 		return ps, err
 	}
 
-	ps.PublishedSeq = d.Seq
+	ps.PublishTimes = append(ps.PublishTimes, nowMs)
+	if d.Seq > ps.PublishedSeq {
+		ps.PublishedSeq = d.Seq
+	}
 	ps.Fails = 0
 	ps.BackoffUntil = 0
+	ps.LastPublishMs = nowMs
 	if d.Kind == "clear" {
 		ps.SessionToken = ""
 	} else {
 		ps.SessionToken = session
 	}
 	return ps, nil
+}
+
+func recentTimes(times []int64, cutoff int64) []int64 {
+	var out []int64
+	for _, t := range times {
+		if t >= cutoff {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 func backoffMs(fails int) int64 {

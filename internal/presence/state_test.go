@@ -17,12 +17,15 @@ func TestState_PlaySetsDesiredWithEnd(t *testing.T) {
 	}
 }
 
-func TestState_PauseFreezesBar(t *testing.T) {
+func TestState_PauseArmsClear(t *testing.T) {
 	s := NewUserState(5000)
 	s.OnReport("playing", act(), 1000)
-	d, ok := s.OnReport("paused", act(), 2000)
-	if !ok || d.Kind != "pause" || d.Act.End != 0 {
-		t.Fatalf("pause should zero End: ok=%v d=%+v", ok, d)
+	if _, ok := s.OnReport("paused", act(), 2000); ok {
+		t.Fatal("pause should not emit inline, it arms a clear like stop")
+	}
+	d, ok := s.Due(7000)
+	if !ok || d.Kind != "clear" {
+		t.Fatalf("pause should clear after the debounce: ok=%v d=%+v", ok, d)
 	}
 }
 
@@ -55,10 +58,36 @@ func TestState_NewPlayCancelsPendingClear(t *testing.T) {
 
 func TestState_SeqStrictlyIncreases(t *testing.T) {
 	s := NewUserState(5000)
-	d1, _ := s.OnReport("playing", act(), 1000)
-	d2, _ := s.OnReport("paused", act(), 2000)
-	d3, _ := s.OnReport("playing", act(), 3000)
+	a := act()
+	d1, _ := s.OnReport("playing", a, 1000)
+	a.Name = "second"
+	d2, _ := s.OnReport("playing", a, 2000)
+	a.Name = "third"
+	d3, _ := s.OnReport("playing", a, 3000)
 	if !(d1.Seq < d2.Seq && d2.Seq < d3.Seq) {
 		t.Fatalf("seq not strictly increasing: %d %d %d", d1.Seq, d2.Seq, d3.Seq)
+	}
+}
+
+func TestState_UnchangedTickNoOps(t *testing.T) {
+	s := NewUserState(5000)
+	d1, ok1 := s.OnReport("playing", act(), 1000)
+	d2, ok2 := s.OnReport("playing", act(), 6000)
+	if !ok1 || ok2 {
+		t.Fatalf("first emits, an identical tick is a no-op: ok1=%v ok2=%v", ok1, ok2)
+	}
+	if d2.Seq != d1.Seq {
+		t.Fatalf("a no-op tick must not advance seq: %d -> %d", d1.Seq, d2.Seq)
+	}
+}
+
+func TestState_SeekReemits(t *testing.T) {
+	s := NewUserState(5000)
+	a := act()
+	d1, _ := s.OnReport("playing", a, 1000)
+	a.Start += 30000 // position jumped
+	d2, ok := s.OnReport("playing", a, 2000)
+	if !ok || d2.Seq <= d1.Seq {
+		t.Fatalf("a seek should re-emit with a new seq: ok=%v %d -> %d", ok, d1.Seq, d2.Seq)
 	}
 }
