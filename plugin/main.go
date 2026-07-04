@@ -104,7 +104,7 @@ func (plugin) PlaybackReport(r scrobbler.PlaybackReportRequest) error {
 	switch r.State {
 	case "playing", "starting":
 		tk := track(r)
-		act := presence.Map(tk, presence.Prefs{Header: "artist"}, r.PositionMs, nowMs)
+		act := presence.Map(tk, configuredPrefs(), r.PositionMs, nowMs)
 		// resolve art only on an album change, reuse the current cover otherwise
 		if tk.Album != "" && tk.Album == snap.LastAct.State && snap.LastAct.LargeImage != "" {
 			act.LargeImage = snap.LastAct.LargeImage
@@ -166,10 +166,28 @@ func (plugin) OnCallback(scheduler.SchedulerCallbackRequest) error {
 
 func track(r scrobbler.PlaybackReportRequest) presence.Track {
 	return presence.Track{
-		Title: r.Track.Title, Artist: r.Track.Artist, Album: r.Track.Album,
+		Title: r.Track.Title, Artist: r.Track.Artist, AlbumArtist: r.Track.AlbumArtist, Album: r.Track.Album,
 		RGID: r.Track.MBZReleaseGroupID, AlbumID: r.Track.MBZAlbumID,
 		DurationMs: int64(r.Track.Duration * 1000),
 	}
+}
+
+// the card line templates from config, defaulting to the artist, track, album layout.
+// these mirror the manifest schema defaults, see configuredArtProviders for why the code
+// carries its own defaults.
+func configuredPrefs() presence.Prefs {
+	return presence.Prefs{
+		Header:  configString("header", "{artist}"),
+		Details: configString("details", "{track}"),
+		State:   configString("state", "{album}"),
+	}
+}
+
+func configString(key, def string) string {
+	if v, ok := pdk.GetConfig(key); ok && v != "" {
+		return v
+	}
+	return def
 }
 
 func resolveArt(t presence.Track) string {

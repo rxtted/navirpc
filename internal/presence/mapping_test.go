@@ -2,26 +2,22 @@ package presence
 
 import "testing"
 
-func TestMap_ArtistHeaderAndTimestamps(t *testing.T) {
-	tr := Track{Title: "Happier Than Ever", Artist: "Billie Eilish", Album: "Happier Than Ever", DurationMs: 180000}
-	a := Map(tr, Prefs{Header: "artist"}, 40000, 1000000)
-	if a.Type != 2 || a.Platform != "desktop" {
-		t.Fatalf("bad base: %+v", a)
-	}
-	if a.Name != "Billie Eilish" || a.Details != "Happier Than Ever" || a.State != "Happier Than Ever" {
-		t.Fatalf("bad text: %+v", a)
-	}
-	if a.Start != 960000 || a.End != 1140000 {
-		t.Fatalf("bad ts: start=%d end=%d", a.Start, a.End)
-	}
-}
+func TestMap_Templates(t *testing.T) {
+	tk := Track{Title: "Hang 'Em High", Artist: "My Chemical Romance", AlbumArtist: "MCR", Album: "Three Cheers", DurationMs: 200000}
 
-func TestMap_HeaderModes(t *testing.T) {
-	tr := Track{Title: "t", Artist: "ar", Album: "al", DurationMs: 1000}
-	cases := map[string]string{"artist": "ar", "album": "al", "track": "t", "Navidrome": "Navidrome"}
-	for header, want := range cases {
-		if got := Map(tr, Prefs{Header: header}, 0, 0).Name; got != want {
-			t.Errorf("header %q: name = %q, want %q", header, got, want)
-		}
+	a := Map(tk, Prefs{Header: "{artist}", Details: "{track}", State: "{album}"}, 30000, 100000)
+	if a.Name != "My Chemical Romance" || a.Details != "Hang 'Em High" || a.State != "Three Cheers" {
+		t.Fatalf("default templates: %+v", a)
+	}
+	if a.Type != 2 || a.Platform != "desktop" {
+		t.Fatalf("activity shape: %+v", a)
+	}
+	if a.Start != 100000-30000 || a.End != a.Start+200000 {
+		t.Fatalf("timestamps anchor to position: start=%d end=%d", a.Start, a.End)
+	}
+
+	a = Map(tk, Prefs{Header: "{artist} - {album}", Details: "{track}", State: "{albumartist}"}, 0, 0)
+	if a.Name != "My Chemical Romance - Three Cheers" || a.State != "MCR" {
+		t.Fatalf("custom template interpolation: %+v", a)
 	}
 }

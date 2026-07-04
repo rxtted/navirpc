@@ -32,6 +32,29 @@
           "description": "Ordered art sources, the first match wins. Remove one to disable it, reorder for priority, or leave the list empty for no art.",
           "items": { "type": "string", "enum": ["coverartarchive", "itunes"] },
           "default": ["coverartarchive", "itunes"]
+        },
+        "header": {
+          "type": "string",
+          "title": "Card header template",
+          "description": "The \"Listening to\" line. A template with {artist}, {albumartist}, {album}, {track} placeholders, or fixed text of your own.",
+          "default": "{artist}"
+        },
+        "details": {
+          "type": "string",
+          "title": "First line template",
+          "description": "The first line under the header. Same placeholders as the header.",
+          "default": "{track}"
+        },
+        "state": {
+          "type": "string",
+          "title": "Second line template",
+          "description": "The second line. Same placeholders as the header.",
+          "default": "{album}"
+        },
+        "client_id": {
+          "type": "string",
+          "title": "Own Discord app client ID",
+          "description": "Leave blank to use the shared app. Set this only if you run your own Discord application, it must match the app the connect page authorized against."
         }
       }
     }

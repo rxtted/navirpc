@@ -1,12 +1,15 @@
 package presence
 
+import "strings"
+
 type Track struct {
-	Title      string
-	Artist     string
-	Album      string
-	RGID       string // musicbrainz release-group id
-	AlbumID    string // musicbrainz release id
-	DurationMs int64
+	Title       string
+	Artist      string
+	AlbumArtist string
+	Album       string
+	RGID        string // musicbrainz release-group id
+	AlbumID     string // musicbrainz release id
+	DurationMs  int64
 }
 
 type Activity struct {
@@ -20,8 +23,11 @@ type Activity struct {
 	LargeImage string
 }
 
+// each field is a template with {artist} {albumartist} {album} {track} placeholders.
 type Prefs struct {
-	Header string // "artist" | "album" | "track" | any fixed string
+	Header  string
+	Details string
+	State   string
 }
 
 // position and now are unix-ms.
@@ -29,24 +35,20 @@ func Map(t Track, prefs Prefs, positionMs, nowMs int64) Activity {
 	start := nowMs - positionMs
 	return Activity{
 		Type:     2,
-		Name:     header(t, prefs.Header),
+		Name:     render(prefs.Header, t),
 		Platform: "desktop",
-		Details:  t.Title,
-		State:    t.Album,
+		Details:  render(prefs.Details, t),
+		State:    render(prefs.State, t),
 		Start:    start,
 		End:      start + t.DurationMs,
 	}
 }
 
-func header(t Track, mode string) string {
-	switch mode {
-	case "", "artist":
-		return t.Artist
-	case "album":
-		return t.Album
-	case "track":
-		return t.Title
-	default:
-		return mode
-	}
+func render(tmpl string, t Track) string {
+	return strings.NewReplacer(
+		"{artist}", t.Artist,
+		"{albumartist}", t.AlbumArtist,
+		"{album}", t.Album,
+		"{track}", t.Title,
+	).Replace(tmpl)
 }
