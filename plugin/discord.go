@@ -124,14 +124,18 @@ func discordPost(path, bearer string, body []byte) (*host.HTTPResponse, error) {
 }
 
 type discordActivity struct {
-	Type          int                `json:"type"`
-	Name          string             `json:"name"`
-	Platform      string             `json:"platform"`
-	ApplicationID string             `json:"application_id,omitempty"`
-	Details       string             `json:"details,omitempty"`
-	State         string             `json:"state,omitempty"`
-	Timestamps    *discordTimestamps `json:"timestamps,omitempty"`
-	Assets        *discordAssets     `json:"assets,omitempty"`
+	Type              int                `json:"type"`
+	Name              string             `json:"name"`
+	Platform          string             `json:"platform"`
+	ApplicationID     string             `json:"application_id,omitempty"`
+	Details           string             `json:"details,omitempty"`
+	DetailsURL        string             `json:"details_url,omitempty"`
+	State             string             `json:"state,omitempty"`
+	StateURL          string             `json:"state_url,omitempty"`
+	StatusDisplayType int                `json:"status_display_type,omitempty"`
+	Timestamps        *discordTimestamps `json:"timestamps,omitempty"`
+	Assets            *discordAssets     `json:"assets,omitempty"`
+	Buttons           []discordButton    `json:"buttons,omitempty"`
 }
 
 type discordTimestamps struct {
@@ -141,18 +145,34 @@ type discordTimestamps struct {
 
 type discordAssets struct {
 	LargeImage string `json:"large_image,omitempty"`
+	LargeText  string `json:"large_text,omitempty"`
+	SmallImage string `json:"small_image,omitempty"`
+	SmallText  string `json:"small_text,omitempty"`
+}
+
+// buttons go up as objects, discord normalizes them to a label array plus metadata.
+type discordButton struct {
+	Label string `json:"label"`
+	URL   string `json:"url"`
 }
 
 func toDiscordActivity(a presence.Activity, clientID string) discordActivity {
 	da := discordActivity{
 		Type: a.Type, Name: a.Name, Platform: a.Platform, ApplicationID: clientID,
-		Details: a.Details, State: a.State,
+		Details: a.Details, DetailsURL: a.DetailsURL,
+		State: a.State, StateURL: a.StateURL,
+		StatusDisplayType: a.StatusDisplayType,
 	}
 	if a.Start != 0 || a.End != 0 {
 		da.Timestamps = &discordTimestamps{Start: a.Start, End: a.End}
 	}
-	if a.LargeImage != "" {
-		da.Assets = &discordAssets{LargeImage: a.LargeImage}
+	if a.LargeImage != "" || a.LargeText != "" || a.SmallImage != "" || a.SmallText != "" {
+		da.Assets = &discordAssets{LargeImage: a.LargeImage, LargeText: a.LargeText, SmallImage: a.SmallImage, SmallText: a.SmallText}
+	}
+	for _, b := range a.Buttons {
+		if b.Label != "" && b.URL != "" {
+			da.Buttons = append(da.Buttons, discordButton{Label: b.Label, URL: b.URL})
+		}
 	}
 	return da
 }

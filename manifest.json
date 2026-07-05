@@ -51,6 +51,58 @@
           "description": "The second line. Same placeholders as the header.",
           "default": "{album}"
         },
+        "type": {
+          "type": "string",
+          "title": "Activity type",
+          "description": "The verb before the header.",
+          "enum": ["listening", "playing", "watching", "competing", "streaming"],
+          "default": "listening"
+        },
+        "status_display_type": {
+          "type": "string",
+          "title": "Compact status line",
+          "description": "Which line shows next to your name in the friends and member list.",
+          "enum": ["name", "state", "details"],
+          "default": "name"
+        },
+        "details_url": {
+          "type": "string",
+          "title": "First line link",
+          "description": "Makes the first line clickable. Any URL, with {artist} {albumartist} {album} {track} {albumid} {rgid} placeholders. Leave blank for no link."
+        },
+        "state_url": {
+          "type": "string",
+          "title": "Second line link",
+          "description": "Makes the second line clickable. Same placeholders as the first line link."
+        },
+        "large_text": {
+          "type": "string",
+          "title": "Cover hover text",
+          "description": "Text shown when hovering the album cover. Same placeholders as the header."
+        },
+        "small_image": {
+          "type": "string",
+          "title": "Corner icon URL",
+          "description": "A raw image URL for a small icon on the corner of the cover. Leave blank for none."
+        },
+        "small_text": {
+          "type": "string",
+          "title": "Corner icon hover text",
+          "description": "Text shown when hovering the corner icon."
+        },
+        "buttons": {
+          "type": "array",
+          "title": "Buttons",
+          "description": "Up to two buttons on the card. Each has a label and a URL, both take the same placeholders as the line links.",
+          "maxItems": 2,
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": { "type": "string", "title": "Label" },
+              "url": { "type": "string", "title": "URL" }
+            }
+          }
+        },
         "client_id": {
           "type": "string",
           "title": "Client ID",

@@ -177,10 +177,30 @@ func track(r scrobbler.PlaybackReportRequest) presence.Track {
 // carries its own defaults.
 func configuredPrefs() presence.Prefs {
 	return presence.Prefs{
-		Header:  configString("header", "{artist}"),
-		Details: configString("details", "{track}"),
-		State:   configString("state", "{album}"),
+		Type:              configString("type", "listening"),
+		Header:            configString("header", "{artist}"),
+		Details:           configString("details", "{track}"),
+		State:             configString("state", "{album}"),
+		DetailsURL:        configString("details_url", ""),
+		StateURL:          configString("state_url", ""),
+		StatusDisplayType: configString("status_display_type", "name"),
+		LargeText:         configString("large_text", ""),
+		SmallImage:        configString("small_image", ""),
+		SmallText:         configString("small_text", ""),
+		Buttons:           configuredButtons(),
 	}
+}
+
+func configuredButtons() []presence.Button {
+	raw, ok := pdk.GetConfig("buttons")
+	if !ok || raw == "" {
+		return nil
+	}
+	var bs []presence.Button
+	if json.Unmarshal([]byte(raw), &bs) != nil {
+		return nil
+	}
+	return bs
 }
 
 func configString(key, def string) string {
