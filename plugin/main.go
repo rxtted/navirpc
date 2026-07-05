@@ -69,9 +69,10 @@ func findUser(username string) (userConfig, bool) {
 func (plugin) OnInit() error {
 	store := kvStore{}
 	for _, u := range readUsers() {
+		// an own-app token carries its own client_id and wins, else the instance default
 		seed, clientID := authFrom(u.Token)
 		if clientID == "" {
-			clientID = centralClientID
+			clientID = configuredClientID()
 		}
 		var cur *auth.Stored
 		if s, ok := store.Load(u.Username); ok {
@@ -122,7 +123,7 @@ func (plugin) PlaybackReport(r scrobbler.PlaybackReportRequest) error {
 		if tk.Album != "" && tk.Album == snap.LastAct.State && snap.LastAct.LargeImage != "" {
 			act.LargeImage = snap.LastAct.LargeImage
 		} else {
-			act.LargeImage = resolveArt(l.artProviders(), tk)
+			act.LargeImage = resolveArt(configuredArtProviders(), tk)
 		}
 		desired, _ = us.OnReport(r.State, act, nowMs)
 	case "paused", "stopped", "expired":
@@ -199,7 +200,6 @@ type look struct {
 	SmallImage        string            `json:"small_image"`
 	SmallText         string            `json:"small_text"`
 	Buttons           []presence.Button `json:"buttons"`
-	ArtProviders      []string          `json:"art_providers"`
 }
 
 func parseLook(config string) look {
@@ -226,11 +226,23 @@ func (l look) prefs() presence.Prefs {
 	}
 }
 
-// a nil art_providers key means it was absent, so default. an explicit empty list is no art.
-func (l look) artProviders() []art.ProviderConfig {
-	names := l.ArtProviders
-	if names == nil {
-		names = []string{"coverartarchive", "itunes"}
+func configuredClientID() string {
+	if v, ok := pdk.GetConfig("client_id"); ok && v != "" {
+		return v
+	}
+	return centralClientID
+}
+
+// an absent or blank setting defaults to caa then itunes, an explicit empty list is no art.
+func configuredArtProviders() []art.ProviderConfig {
+	def := []art.ProviderConfig{{Name: "coverartarchive"}, {Name: "itunes"}}
+	raw, ok := pdk.GetConfig("art_providers")
+	if !ok || raw == "" {
+		return def
+	}
+	var names []string
+	if json.Unmarshal([]byte(raw), &names) != nil {
+		return def
 	}
 	cfgs := make([]art.ProviderConfig, 0, len(names))
 	for _, n := range names {
