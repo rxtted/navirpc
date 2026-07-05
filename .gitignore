@@ -6,3 +6,5 @@ config.yml
 *.log
 plugin.wasm
 navirpc.ndp
+node_modules/
+dist/

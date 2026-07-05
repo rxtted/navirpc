@@ -33,11 +33,6 @@
           "description": "Ordered art sources for the whole instance, the first match wins. Remove one to disable it, reorder for priority, or leave the list empty for no art.",
           "items": { "type": "string", "enum": ["coverartarchive", "itunes"] },
           "default": ["coverartarchive", "itunes"]
-        },
-        "client_id": {
-          "type": "string",
-          "title": "Client ID",
-          "description": "The default Discord application for this instance. Leave blank to use the built-in app. If a user runs their own app, the auth value they paste carries its own client ID alongside the token, and that takes precedence, since a refresh token can only be renewed against the app it was authorized with."
         }
       }
     }

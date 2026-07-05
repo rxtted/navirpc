@@ -4,15 +4,15 @@ import "testing"
 
 func TestReconcile_NewSeedAdoptsAndClearsDead(t *testing.T) {
 	cur := &Stored{Seed: "old", ClientID: "c", Refresh: "rotated", Dead: true}
-	got := Reconcile("new", "c", "u", cur)
-	if got.Seed != "new" || got.Refresh != "new" || got.Dead || got.DiscordUserID != "u" {
+	got := Reconcile("new", "c", cur)
+	if got.Seed != "new" || got.Refresh != "new" || got.Dead {
 		t.Fatalf("new seed should adopt and clear dead: %+v", got)
 	}
 }
 
 func TestReconcile_NewClientIDForcesReseed(t *testing.T) {
 	cur := &Stored{Seed: "s", ClientID: "old", Refresh: "rotated"}
-	got := Reconcile("s", "new", "u", cur)
+	got := Reconcile("s", "new", cur)
 	if got.ClientID != "new" || got.Refresh != "s" {
 		t.Fatalf("client id change should reseed: %+v", got)
 	}
@@ -20,7 +20,7 @@ func TestReconcile_NewClientIDForcesReseed(t *testing.T) {
 
 func TestReconcile_UnchangedKeepsLiveToken(t *testing.T) {
 	cur := &Stored{Seed: "s", ClientID: "c", Refresh: "rotated", Access: "at"}
-	got := Reconcile("s", "c", "u", cur)
+	got := Reconcile("s", "c", cur)
 	if got != cur || got.Refresh != "rotated" {
 		t.Fatalf("unchanged config should keep the live token: %+v", got)
 	}
