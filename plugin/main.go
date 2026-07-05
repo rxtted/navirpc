@@ -41,6 +41,7 @@ var (
 type userConfig struct {
 	Username string `json:"username"`
 	Token    string `json:"token"`
+	Config   string `json:"config"`
 }
 
 func readUsers() []userConfig {
@@ -56,14 +57,22 @@ func readUsers() []userConfig {
 	return users
 }
 
-func (plugin) OnInit() error {
-	clientID := centralClientID
-	if v, ok := pdk.GetConfig("client_id"); ok && v != "" {
-		clientID = v
+func findUser(username string) (userConfig, bool) {
+	for _, u := range readUsers() {
+		if u.Username == username {
+			return u, true
+		}
 	}
+	return userConfig{}, false
+}
+
+func (plugin) OnInit() error {
 	store := kvStore{}
 	for _, u := range readUsers() {
-		seed := seedFrom(u.Token)
+		seed, clientID := authFrom(u.Token)
+		if clientID == "" {
+			clientID = centralClientID
+		}
 		var cur *auth.Stored
 		if s, ok := store.Load(u.Username); ok {
 			cur = &s
@@ -84,15 +93,17 @@ func (plugin) OnInit() error {
 	return nil
 }
 
-// the token config field is either a raw refresh token or the connect page's json blob.
-func seedFrom(token string) string {
+// the token field is a raw refresh token or the connect page's auth unit {token, client_id}.
+// client_id is empty when the central app was used, the caller falls back to it.
+func authFrom(token string) (seed, clientID string) {
 	var blob struct {
-		Token string `json:"token"`
+		Token    string `json:"token"`
+		ClientID string `json:"client_id"`
 	}
 	if json.Unmarshal([]byte(token), &blob) == nil && blob.Token != "" {
-		return blob.Token
+		return blob.Token, blob.ClientID
 	}
-	return token
+	return token, ""
 }
 
 func (plugin) PlaybackReport(r scrobbler.PlaybackReportRequest) error {
@@ -103,13 +114,15 @@ func (plugin) PlaybackReport(r scrobbler.PlaybackReportRequest) error {
 	var desired presence.Desired
 	switch r.State {
 	case "playing", "starting":
+		u, _ := findUser(r.Username)
+		l := parseLook(u.Config)
 		tk := track(r)
-		act := presence.Map(tk, configuredPrefs(), r.PositionMs, nowMs)
+		act := presence.Map(tk, l.prefs(), r.PositionMs, nowMs)
 		// resolve art only on an album change, reuse the current cover otherwise
 		if tk.Album != "" && tk.Album == snap.LastAct.State && snap.LastAct.LargeImage != "" {
 			act.LargeImage = snap.LastAct.LargeImage
 		} else {
-			act.LargeImage = resolveArt(tk)
+			act.LargeImage = resolveArt(l.artProviders(), tk)
 		}
 		desired, _ = us.OnReport(r.State, act, nowMs)
 	case "paused", "stopped", "expired":
@@ -172,69 +185,70 @@ func track(r scrobbler.PlaybackReportRequest) presence.Track {
 	}
 }
 
-// the card line templates from config, defaulting to the artist, track, album layout.
-// these mirror the manifest schema defaults, see configuredArtProviders for why the code
-// carries its own defaults.
-func configuredPrefs() presence.Prefs {
+// the per-user look, authored on the connect page and pasted into the config field. an
+// empty field or an absent key falls back to the default card.
+type look struct {
+	Type              string            `json:"type"`
+	Header            string            `json:"header"`
+	Details           string            `json:"details"`
+	State             string            `json:"state"`
+	DetailsURL        string            `json:"details_url"`
+	StateURL          string            `json:"state_url"`
+	StatusDisplayType string            `json:"status_display_type"`
+	LargeText         string            `json:"large_text"`
+	SmallImage        string            `json:"small_image"`
+	SmallText         string            `json:"small_text"`
+	Buttons           []presence.Button `json:"buttons"`
+	ArtProviders      []string          `json:"art_providers"`
+}
+
+func parseLook(config string) look {
+	var l look
+	if config != "" {
+		json.Unmarshal([]byte(config), &l)
+	}
+	return l
+}
+
+func (l look) prefs() presence.Prefs {
 	return presence.Prefs{
-		Type:              configString("type", "listening"),
-		Header:            configString("header", "{artist}"),
-		Details:           configString("details", "{track}"),
-		State:             configString("state", "{album}"),
-		DetailsURL:        configString("details_url", ""),
-		StateURL:          configString("state_url", ""),
-		StatusDisplayType: configString("status_display_type", "name"),
-		LargeText:         configString("large_text", ""),
-		SmallImage:        configString("small_image", ""),
-		SmallText:         configString("small_text", ""),
-		Buttons:           configuredButtons(),
+		Type:              orElse(l.Type, "listening"),
+		Header:            orElse(l.Header, "{artist}"),
+		Details:           orElse(l.Details, "{track}"),
+		State:             orElse(l.State, "{album}"),
+		DetailsURL:        l.DetailsURL,
+		StateURL:          l.StateURL,
+		StatusDisplayType: orElse(l.StatusDisplayType, "name"),
+		LargeText:         l.LargeText,
+		SmallImage:        l.SmallImage,
+		SmallText:         l.SmallText,
+		Buttons:           l.Buttons,
 	}
 }
 
-func configuredButtons() []presence.Button {
-	raw, ok := pdk.GetConfig("buttons")
-	if !ok || raw == "" {
-		return nil
-	}
-	var bs []presence.Button
-	if json.Unmarshal([]byte(raw), &bs) != nil {
-		return nil
-	}
-	return bs
-}
-
-func configString(key, def string) string {
-	if v, ok := pdk.GetConfig(key); ok && v != "" {
-		return v
-	}
-	return def
-}
-
-func resolveArt(t presence.Track) string {
-	providers := art.Build(configuredArtProviders())
-	url, _ := art.Chain(providers, nil, art.Meta{RGID: t.RGID, AlbumID: t.AlbumID, Artist: t.Artist, Album: t.Album}, httpGetter{})
-	return url
-}
-
-// the ordered art provider chain from config. navidrome doesn't apply schema defaults to
-// what a plugin reads, so this default mirrors the manifest schema default and the two
-// must stay in sync. a user drops a provider to disable it, reorders it, or empties the
-// list for no art.
-func configuredArtProviders() []art.ProviderConfig {
-	def := []art.ProviderConfig{{Name: "coverartarchive"}, {Name: "itunes"}}
-	raw, ok := pdk.GetConfig("art_providers")
-	if !ok || raw == "" {
-		return def
-	}
-	var names []string
-	if json.Unmarshal([]byte(raw), &names) != nil {
-		return def
+// a nil art_providers key means it was absent, so default. an explicit empty list is no art.
+func (l look) artProviders() []art.ProviderConfig {
+	names := l.ArtProviders
+	if names == nil {
+		names = []string{"coverartarchive", "itunes"}
 	}
 	cfgs := make([]art.ProviderConfig, 0, len(names))
 	for _, n := range names {
 		cfgs = append(cfgs, art.ProviderConfig{Name: n})
 	}
 	return cfgs
+}
+
+func orElse(v, def string) string {
+	if v == "" {
+		return def
+	}
+	return v
+}
+
+func resolveArt(providers []art.ProviderConfig, t presence.Track) string {
+	url, _ := art.Chain(art.Build(providers), nil, art.Meta{RGID: t.RGID, AlbumID: t.AlbumID, Artist: t.Artist, Album: t.Album}, httpGetter{})
+	return url
 }
 
 func (plugin) IsAuthorized(r scrobbler.IsAuthorizedRequest) (bool, error) {

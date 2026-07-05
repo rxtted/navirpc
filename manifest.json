@@ -17,96 +17,15 @@
         "users": {
           "type": "array",
           "title": "User bindings",
-          "description": "One entry per Navidrome user that should broadcast presence",
+          "description": "One entry per Navidrome user that should broadcast presence.",
           "items": {
             "type": "object",
             "properties": {
               "username": { "type": "string", "title": "Navidrome username" },
-              "token": { "type": "string", "title": "Config value from the connect page" }
+              "token": { "type": "string", "title": "Auth value", "description": "The auth value from the connect page, or a raw Discord refresh token." },
+              "config": { "type": "string", "title": "Look config", "description": "Optional card design from the connect page. Leave blank for the default card." }
             }
           }
-        },
-        "art_providers": {
-          "type": "array",
-          "title": "Album art providers",
-          "description": "Ordered art sources, the first match wins. Remove one to disable it, reorder for priority, or leave the list empty for no art.",
-          "items": { "type": "string", "enum": ["coverartarchive", "itunes"] },
-          "default": ["coverartarchive", "itunes"]
-        },
-        "header": {
-          "type": "string",
-          "title": "Card header template",
-          "description": "The \"Listening to\" line. A template with {artist}, {albumartist}, {album}, {track} placeholders, or fixed text of your own.",
-          "default": "{artist}"
-        },
-        "details": {
-          "type": "string",
-          "title": "First line template",
-          "description": "The first line under the header. Same placeholders as the header.",
-          "default": "{track}"
-        },
-        "state": {
-          "type": "string",
-          "title": "Second line template",
-          "description": "The second line. Same placeholders as the header.",
-          "default": "{album}"
-        },
-        "type": {
-          "type": "string",
-          "title": "Activity type",
-          "description": "The verb before the header.",
-          "enum": ["listening", "playing", "watching", "competing", "streaming"],
-          "default": "listening"
-        },
-        "status_display_type": {
-          "type": "string",
-          "title": "Compact status line",
-          "description": "Which line shows next to your name in the friends and member list.",
-          "enum": ["name", "state", "details"],
-          "default": "name"
-        },
-        "details_url": {
-          "type": "string",
-          "title": "First line link",
-          "description": "Makes the first line clickable. Any URL, with {artist} {albumartist} {album} {track} {albumid} {rgid} placeholders. Leave blank for no link."
-        },
-        "state_url": {
-          "type": "string",
-          "title": "Second line link",
-          "description": "Makes the second line clickable. Same placeholders as the first line link."
-        },
-        "large_text": {
-          "type": "string",
-          "title": "Cover hover text",
-          "description": "Text shown when hovering the album cover. Same placeholders as the header."
-        },
-        "small_image": {
-          "type": "string",
-          "title": "Corner icon URL",
-          "description": "A raw image URL for a small icon on the corner of the cover. Leave blank for none."
-        },
-        "small_text": {
-          "type": "string",
-          "title": "Corner icon hover text",
-          "description": "Text shown when hovering the corner icon."
-        },
-        "buttons": {
-          "type": "array",
-          "title": "Buttons",
-          "description": "Up to two buttons on the card. Each has a label and a URL, both take the same placeholders as the line links.",
-          "maxItems": 2,
-          "items": {
-            "type": "object",
-            "properties": {
-              "label": { "type": "string", "title": "Label" },
-              "url": { "type": "string", "title": "URL" }
-            }
-          }
-        },
-        "client_id": {
-          "type": "string",
-          "title": "Client ID",
-          "description": "Set this only if you run your own Discord application, otherwise leave blank to use the default app. It must be the same client ID you authorized with on the connect page, since the token is bound to that app."
         }
       }
     }
