@@ -37,16 +37,25 @@ func (kvStore) Save(username string, s auth.Stored) error {
 // it writes it, the presence key is the shared publish state the scheduler tick also updates.
 // keeping them separate is what lets the tick run without a lock, see the spec.
 
-func loadSnapshot(username string) presence.Snapshot {
-	var snap presence.Snapshot
-	if b, ok, err := host.KVStoreGet("playback:" + username); err == nil && ok {
-		json.Unmarshal(b, &snap)
-	}
-	return snap
+// the report path's state, the presence snapshot plus the art memo for the current
+// album. the memo keeps misses too, a coverless album must not hit the providers
+// again on every report
+type playbackState struct {
+	presence.Snapshot
+	ArtKey string
+	ArtURL string
 }
 
-func saveSnapshot(username string, snap presence.Snapshot) {
-	if b, err := json.Marshal(snap); err == nil {
+func loadSnapshot(username string) playbackState {
+	var st playbackState
+	if b, ok, err := host.KVStoreGet("playback:" + username); err == nil && ok {
+		json.Unmarshal(b, &st)
+	}
+	return st
+}
+
+func saveSnapshot(username string, st playbackState) {
+	if b, err := json.Marshal(st); err == nil {
 		_ = host.KVStoreSet("playback:"+username, b)
 	}
 }

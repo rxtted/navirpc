@@ -60,40 +60,26 @@ func (c *countProvider) Resolve(Meta, Getter) (string, bool) {
 	return c.url, true
 }
 
-type mapCache map[string]string
-
-func (m mapCache) Get(k string) (string, bool) { v, ok := m[k]; return v, ok }
-func (m mapCache) Set(k, v string)             { m[k] = v }
-
 func TestChain_FirstHitWins(t *testing.T) {
 	first := &countProvider{url: "a"}
 	second := &countProvider{url: "b"}
-	url, ok := Chain([]Provider{first, second}, mapCache{}, Meta{AlbumID: "id"}, nil)
+	url, ok := Chain([]Provider{first, second}, Meta{AlbumID: "id"}, nil)
 	if !ok || url != "a" || second.calls != 0 {
 		t.Fatalf("first hit should win and short-circuit: url=%q secondCalls=%d", url, second.calls)
 	}
 }
 
-func TestChain_CachesHit(t *testing.T) {
-	p := &countProvider{url: "a"}
-	cache := mapCache{}
-	m := Meta{AlbumID: "id"}
-	Chain([]Provider{p}, cache, m, nil)
-	Chain([]Provider{p}, cache, m, nil)
-	if p.calls != 1 {
-		t.Fatalf("second call should hit cache, provider calls=%d", p.calls)
+func TestKey(t *testing.T) {
+	if k := Key(Meta{AlbumID: "al", RGID: "rg", Artist: "x", Album: "y"}); k != "al" {
+		t.Fatalf("albumid should win, got %q", k)
 	}
-}
-
-func TestChain_CachesMiss(t *testing.T) {
-	p := &countProvider{url: ""} // always misses
-	cache := mapCache{}
-	m := Meta{AlbumID: "id"}
-	Chain([]Provider{p}, cache, m, nil)
-	if _, ok := Chain([]Provider{p}, cache, m, nil); ok {
-		t.Fatal("cached miss should stay a miss")
+	if k := Key(Meta{RGID: "rg", Artist: "x", Album: "y"}); k != "rg" {
+		t.Fatalf("rgid should beat the name fallback, got %q", k)
 	}
-	if p.calls != 1 {
-		t.Fatalf("a cached miss should not re-call the provider, calls=%d", p.calls)
+	if k := Key(Meta{Artist: "x", Album: "y"}); k != "x - y" {
+		t.Fatalf("name fallback should join artist and album, got %q", k)
+	}
+	if k := Key(Meta{}); k != "" {
+		t.Fatalf("no usable identity should give no key, got %q", k)
 	}
 }

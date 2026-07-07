@@ -17,11 +17,6 @@ type Provider interface {
 	Resolve(Meta, Getter) (url string, ok bool)
 }
 
-type Cache interface {
-	Get(key string) (string, bool)
-	Set(key, val string)
-}
-
 // one enabled provider from user config, its registered name plus its own settings, an
 // api key or a url pattern, nil for providers that need none.
 type ProviderConfig struct {

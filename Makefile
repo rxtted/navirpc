@@ -4,7 +4,7 @@ NDP := navirpc.ndp
 build:
 	cd plugin && GOOS=wasip1 GOARCH=wasm go build -buildmode=c-shared -o ../$(WASM) .
 
-# fallback if std-go wasm misbehaves in navidrome (needs tinygo installed)
+# fallback if std-go wasm misbehaves in navidrome, needs tinygo installed
 tinygo:
 	cd plugin && tinygo build -opt=2 -scheduler=none -no-debug -target wasip1 -buildmode=c-shared -o ../$(WASM) .
 

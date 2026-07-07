@@ -109,8 +109,8 @@ func authFrom(token string) (seed, clientID string) {
 
 func (plugin) PlaybackReport(r scrobbler.PlaybackReportRequest) error {
 	nowMs := time.Now().UnixMilli()
-	snap := loadSnapshot(r.Username)
-	us := presence.RestoreUserState(clearDebounceMs, snap)
+	st := loadSnapshot(r.Username)
+	us := presence.RestoreUserState(clearDebounceMs, st.Snapshot)
 
 	var desired presence.Desired
 	switch r.State {
@@ -119,11 +119,14 @@ func (plugin) PlaybackReport(r scrobbler.PlaybackReportRequest) error {
 		l := parseLook(u.Config)
 		tk := track(r)
 		act := presence.Map(tk, l.prefs(), r.PositionMs, nowMs)
-		// resolve art only on an album change, reuse the current cover otherwise
-		if tk.Album != "" && tk.Album == snap.LastAct.State && snap.LastAct.LargeImage != "" {
-			act.LargeImage = snap.LastAct.LargeImage
+		// resolve art only on an album change, keyed off the raw track identity. the
+		// rendered state text is a user template and can be anything
+		m := art.Meta{RGID: tk.RGID, AlbumID: tk.AlbumID, Artist: tk.Artist, Album: tk.Album}
+		if key := art.Key(m); key != "" && key == st.ArtKey {
+			act.LargeImage = st.ArtURL
 		} else {
-			act.LargeImage = resolveArt(configuredArtProviders(), tk)
+			act.LargeImage, _ = art.Chain(art.Build(configuredArtProviders()), m, httpGetter{})
+			st.ArtKey, st.ArtURL = key, act.LargeImage
 		}
 		desired, _ = us.OnReport(r.State, act, nowMs)
 	case "paused", "stopped", "expired":
@@ -132,7 +135,8 @@ func (plugin) PlaybackReport(r scrobbler.PlaybackReportRequest) error {
 	default:
 		return nil
 	}
-	saveSnapshot(r.Username, us.Snapshot())
+	st.Snapshot = us.Snapshot()
+	saveSnapshot(r.Username, st)
 
 	if desired.Seq == 0 {
 		return nil
@@ -249,11 +253,6 @@ func orElse(v, def string) string {
 		return def
 	}
 	return v
-}
-
-func resolveArt(providers []art.ProviderConfig, t presence.Track) string {
-	url, _ := art.Chain(art.Build(providers), nil, art.Meta{RGID: t.RGID, AlbumID: t.AlbumID, Artist: t.Artist, Album: t.Album}, httpGetter{})
-	return url
 }
 
 func (plugin) IsAuthorized(r scrobbler.IsAuthorizedRequest) (bool, error) {
