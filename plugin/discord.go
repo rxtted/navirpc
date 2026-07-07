@@ -16,7 +16,7 @@ import (
 
 const apiBase = "https://discord.com/api/v10"
 
-// discord is behind cloudflare, which 1010-blocks a default http agent.
+// discord is behind cloudflare, which 1010-blocks a default http client bc of course it does
 const userAgent = "Mozilla/5.0 navirpc/0.1"
 
 type discordRefresher struct{}

@@ -7,7 +7,7 @@ import "errors"
 const keepaliveMs = 15 * 60 * 1000
 
 // discord's headless-session bucket is 5 requests / 20s. stay a step under it and coalesce
-// the rest, so a scrub burst never trips a 429.
+// the rest, so somebody scrub-spamming through a track never trips a 429
 const (
 	rateWindowMs = 20000
 	rateMax      = 4

@@ -1,0 +1,32 @@
+[
+  {
+    "template": "{artist}/{albumartist}/{album}/{track}/{albumid}/{rgid}",
+    "fixture": { "artist": "Saosin", "albumartist": "Saosin", "album": "In Search of Solid Ground", "track": "Deep Down", "albumid": "al-1", "rgid": "rg-1" },
+    "expected": "Saosin/Saosin/In Search of Solid Ground/Deep Down/al-1/rg-1"
+  },
+  {
+    "template": "{artist} {bogus}",
+    "fixture": { "artist": "Saosin" },
+    "expected": "Saosin {bogus}"
+  },
+  {
+    "template": "x{albumid}x",
+    "fixture": { "artist": "Saosin" },
+    "expected": "xx"
+  },
+  {
+    "template": "{track} {track}",
+    "fixture": { "track": "Deep Down" },
+    "expected": "Deep Down Deep Down"
+  },
+  {
+    "template": "fixed text, no placeholders",
+    "fixture": { "artist": "Saosin" },
+    "expected": "fixed text, no placeholders"
+  },
+  {
+    "template": "",
+    "fixture": { "artist": "Saosin" },
+    "expected": ""
+  }
+]

@@ -38,8 +38,7 @@ func (kvStore) Save(username string, s auth.Stored) error {
 // keeping them separate is what lets the tick run without a lock, see the spec.
 
 // the report path's state, the presence snapshot plus the art memo for the current
-// album. the memo keeps misses too, a coverless album must not hit the providers
-// again on every report
+// album. the memo keeps misses too, the cover isnt going to appear on the fifth ask
 type playbackState struct {
 	presence.Snapshot
 	ArtKey string
