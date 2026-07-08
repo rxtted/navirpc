@@ -35,3 +35,25 @@ func TestRender_SharedVectors(t *testing.T) {
 		}
 	}
 }
+
+// the ts side imports this file as its DEFAULTS const, this pins the go chain to it
+func TestDefaultCard_SharedFixture(t *testing.T) {
+	b, err := os.ReadFile("../../testdata/default-card.json")
+	if err != nil {
+		t.Fatalf("shared default card unreadable: %v", err)
+	}
+	var d struct {
+		Type              string `json:"type"`
+		Header            string `json:"header"`
+		Details           string `json:"details"`
+		State             string `json:"state"`
+		StatusDisplayType string `json:"status_display_type"`
+	}
+	if err := json.Unmarshal(b, &d); err != nil {
+		t.Fatalf("shared default card is not valid json: %v", err)
+	}
+	p := Look{}.Prefs()
+	if p.Type != d.Type || p.Header != d.Header || p.Details != d.Details || p.State != d.State || p.StatusDisplayType != d.StatusDisplayType {
+		t.Fatalf("the default card drifted from the shared fixture: got %+v want %+v", p, d)
+	}
+}

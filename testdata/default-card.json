@@ -1,0 +1,7 @@
+{
+  "type": "listening",
+  "header": "{artist}",
+  "details": "{track}",
+  "state": "{album}",
+  "status_display_type": "name"
+}

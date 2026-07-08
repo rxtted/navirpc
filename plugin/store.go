@@ -35,7 +35,7 @@ func (kvStore) Save(username string, s auth.Stored) error {
 
 // per-user state is split by owner. the playback key is the report path's snapshot, only
 // it writes it, the presence key is the shared publish state the scheduler tick also updates.
-// keeping them separate is what lets the tick run without a lock, see the spec.
+// keeping them separate is what lets the tick run without a lock
 
 // the report path's state, the presence snapshot plus the art memo for the current
 // album. the memo keeps misses too, the cover isnt going to appear on the fifth ask
