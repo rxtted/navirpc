@@ -118,7 +118,7 @@ func (plugin) PlaybackReport(r scrobbler.PlaybackReportRequest) error {
 		u, _ := findUser(r.Username)
 		l := parseLook(r.Username, u.Config)
 		tk := track(r)
-		act := presence.Map(tk, l.prefs(), r.PositionMs, nowMs)
+		act := presence.Map(tk, l.Prefs(), r.PositionMs, nowMs)
 		// resolve art only on an album change, keyed off the raw track identity. the
 		// rendered state text is a user template and can be anything
 		m := art.Meta{RGID: tk.RGID, AlbumID: tk.AlbumID, Artist: tk.Artist, Album: tk.Album}
@@ -192,22 +192,8 @@ func track(r scrobbler.PlaybackReportRequest) presence.Track {
 
 // the per-user look, authored on the connect page and pasted into the config field. an
 // empty field or an absent key falls back to the default card.
-type look struct {
-	Type              string            `json:"type"`
-	Header            string            `json:"header"`
-	Details           string            `json:"details"`
-	State             string            `json:"state"`
-	DetailsURL        string            `json:"details_url"`
-	StateURL          string            `json:"state_url"`
-	StatusDisplayType string            `json:"status_display_type"`
-	LargeText         string            `json:"large_text"`
-	SmallImage        string            `json:"small_image"`
-	SmallText         string            `json:"small_text"`
-	Buttons           []presence.Button `json:"buttons"`
-}
-
-func parseLook(username, config string) look {
-	var l look
+func parseLook(username, config string) presence.Look {
+	var l presence.Look
 	if config == "" {
 		return l
 	}
@@ -215,22 +201,6 @@ func parseLook(username, config string) look {
 		pdk.Log(pdk.LogWarn, "navirpc: look config for "+username+" is not valid json, using the default card")
 	}
 	return l
-}
-
-func (l look) prefs() presence.Prefs {
-	return presence.Prefs{
-		Type:              orElse(l.Type, "listening"),
-		Header:            orElse(l.Header, "{artist}"),
-		Details:           orElse(l.Details, "{track}"),
-		State:             orElse(l.State, "{album}"),
-		DetailsURL:        l.DetailsURL,
-		StateURL:          l.StateURL,
-		StatusDisplayType: orElse(l.StatusDisplayType, "name"),
-		LargeText:         l.LargeText,
-		SmallImage:        l.SmallImage,
-		SmallText:         l.SmallText,
-		Buttons:           l.Buttons,
-	}
 }
 
 // an absent or blank setting defaults to caa then itunes, an explicit empty list is no art.
@@ -249,13 +219,6 @@ func configuredArtProviders() []art.ProviderConfig {
 		cfgs = append(cfgs, art.ProviderConfig{Name: n})
 	}
 	return cfgs
-}
-
-func orElse(v, def string) string {
-	if v == "" {
-		return def
-	}
-	return v
 }
 
 func (plugin) IsAuthorized(r scrobbler.IsAuthorizedRequest) (bool, error) {
