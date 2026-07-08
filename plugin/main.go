@@ -170,7 +170,7 @@ func (plugin) OnCallback(scheduler.SchedulerCallbackRequest) error {
 		}
 		ps := loadPresence(u.Username)
 		if ps.SessionToken == "" {
-			continue // no established session to keep alive, only the report path creates one
+			continue // no session, nothing to keep alive or clear, only the report path creates one
 		}
 		desired := presence.Desired{Seq: snap.Seq, Kind: snap.LastKind, Act: snap.LastAct}
 		ps, err := presence.Reconcile(u.Username, desired, ps, discordPublisher{}, nowMs)

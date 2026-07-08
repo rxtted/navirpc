@@ -42,6 +42,12 @@ func Reconcile(userID string, d Desired, ps PubState, pub Publisher, nowMs int64
 		return ps, nil
 	}
 
+	// no session means theres no card to take down, call the clear done
+	if d.Kind == "clear" && ps.SessionToken == "" {
+		ps.PublishedSeq = d.Seq
+		return ps, nil
+	}
+
 	// throttle publishes to the rate window. clears are exempt so a stop is never stuck
 	// behind the throttle. a throttled publish is retried by a later report.
 	ps.PublishTimes = recentTimes(ps.PublishTimes, nowMs-rateWindowMs)

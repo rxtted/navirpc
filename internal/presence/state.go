@@ -29,10 +29,15 @@ func (s *UserState) OnReport(state string, act Activity, nowMs int64) (Desired, 
 		return s.emit("play", act)
 	case "paused", "stopped", "expired":
 		// hide the card, pause clears like a stop. arm a clear, a new play before the
-		// deadline cancels it, otherwise Due emits it. forget the last activity so a later
-		// play re-emits even for the same track.
+		// deadline cancels it, otherwise Due emits it. lastKind goes to clear so the
+		// intent survives a failed publish, the tick keeps nagging discord until the
+		// card actually dies instead of leaving it up till the TTL reaps it. a later
+		// play still re-emits even for the same track
+		if s.lastKind == "clear" && s.pendingClearAt == 0 {
+			return Desired{}, false
+		}
 		s.pendingClearAt = nowMs + s.debounceMs
-		s.lastKind, s.lastAct = "", Activity{}
+		s.lastKind, s.lastAct = "clear", Activity{}
 		return Desired{}, false
 	default:
 		return Desired{}, false

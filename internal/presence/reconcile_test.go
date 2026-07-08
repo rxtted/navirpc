@@ -79,6 +79,27 @@ func TestReconcile_ClearUsesSessionToken(t *testing.T) {
 	}
 }
 
+func TestReconcile_FailedClearRetries(t *testing.T) {
+	pub := &fakePub{err: errors.New("discord 429")}
+	ps, err := Reconcile("u", Desired{Seq: 6, Kind: "clear"}, PubState{PublishedSeq: 5, SessionToken: "sess"}, pub, 1000)
+	if err == nil || ps.SessionToken != "sess" || ps.PublishedSeq != 5 {
+		t.Fatalf("a failed clear should keep the session for the retry: ps=%+v", ps)
+	}
+	pub.err = nil
+	ps, err = Reconcile("u", Desired{Seq: 6, Kind: "clear"}, ps, pub, 2000)
+	if err != nil || ps.SessionToken != "" || ps.PublishedSeq != 6 || len(pub.cleared) != 2 {
+		t.Fatalf("the retried clear should land and reset the session: ps=%+v pub=%+v", ps, pub)
+	}
+}
+
+func TestReconcile_ClearWithoutSessionNoOps(t *testing.T) {
+	pub := &fakePub{}
+	ps, err := Reconcile("u", Desired{Seq: 6, Kind: "clear"}, PubState{PublishedSeq: 5}, pub, 1000)
+	if err != nil || len(pub.cleared) != 0 || ps.PublishedSeq != 6 {
+		t.Fatalf("no session means the clear is already true: ps=%+v pub=%+v", ps, pub)
+	}
+}
+
 func TestReconcile_PublishErrorBacksOff(t *testing.T) {
 	pub := &fakePub{err: errors.New("discord 500")}
 	ps, err := Reconcile("u", Desired{Seq: 5, Kind: "play"}, PubState{PublishedSeq: 2}, pub, 1000)

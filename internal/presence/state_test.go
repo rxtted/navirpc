@@ -81,6 +81,38 @@ func TestState_UnchangedTickNoOps(t *testing.T) {
 	}
 }
 
+func TestState_ClearSurvivesSnapshot(t *testing.T) {
+	s := NewUserState(0)
+	s.OnReport("playing", act(), 1000)
+	s.OnReport("stopped", Activity{}, 2000)
+	d, _ := s.Due(2000)
+	snap := s.Snapshot()
+	if snap.LastKind != "clear" || snap.Seq != d.Seq {
+		t.Fatalf("the snapshot should carry the clear as desired state: %+v", snap)
+	}
+}
+
+func TestState_RepeatStopNoOps(t *testing.T) {
+	s := NewUserState(0)
+	s.OnReport("playing", act(), 1000)
+	s.OnReport("stopped", Activity{}, 2000)
+	s.Due(2000)
+	s.OnReport("stopped", Activity{}, 3000)
+	if _, ok := s.Due(9000); ok {
+		t.Fatal("a stop after the clear emitted should not arm another")
+	}
+}
+
+func TestState_PlayAfterClearReemitsSameTrack(t *testing.T) {
+	s := NewUserState(0)
+	s.OnReport("playing", act(), 1000)
+	s.OnReport("paused", act(), 2000)
+	s.Due(2000)
+	if _, ok := s.OnReport("playing", act(), 3000); !ok {
+		t.Fatal("resuming the same track after a clear should re-emit")
+	}
+}
+
 func TestState_SeekReemits(t *testing.T) {
 	s := NewUserState(5000)
 	a := act()
