@@ -116,7 +116,7 @@ func (plugin) PlaybackReport(r scrobbler.PlaybackReportRequest) error {
 	switch r.State {
 	case "playing", "starting":
 		u, _ := findUser(r.Username)
-		l := parseLook(u.Config)
+		l := parseLook(r.Username, u.Config)
 		tk := track(r)
 		act := presence.Map(tk, l.prefs(), r.PositionMs, nowMs)
 		// resolve art only on an album change, keyed off the raw track identity. the
@@ -206,10 +206,13 @@ type look struct {
 	Buttons           []presence.Button `json:"buttons"`
 }
 
-func parseLook(config string) look {
+func parseLook(username, config string) look {
 	var l look
-	if config != "" {
-		json.Unmarshal([]byte(config), &l)
+	if config == "" {
+		return l
+	}
+	if json.Unmarshal([]byte(config), &l) != nil {
+		pdk.Log(pdk.LogWarn, "navirpc: look config for "+username+" is not valid json, using the default card")
 	}
 	return l
 }
