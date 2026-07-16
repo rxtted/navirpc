@@ -1,4 +1,4 @@
-module github.com/rxtted/navirpc
+module atrophy/navirpc
 
 go 1.26
 

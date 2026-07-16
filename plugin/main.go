@@ -11,9 +11,9 @@ import (
 	"github.com/navidrome/navidrome/plugins/pdk/go/pdk"
 	"github.com/navidrome/navidrome/plugins/pdk/go/scheduler"
 	"github.com/navidrome/navidrome/plugins/pdk/go/scrobbler"
-	"github.com/rxtted/navirpc/internal/art"
-	"github.com/rxtted/navirpc/internal/auth"
-	"github.com/rxtted/navirpc/internal/presence"
+	"atrophy/navirpc/internal/art"
+	"atrophy/navirpc/internal/auth"
+	"atrophy/navirpc/internal/presence"
 )
 
 const centralClientID = "1522831068774924308"

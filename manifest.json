@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/navidrome/navidrome/refs/heads/master/plugins/manifest-schema.json",
   "name": "navirpc",
-  "author": "rxtted",
+  "author": "Atrophy",
   "version": "0.0.1",
   "description": "Discord rich presence from Navidrome",
   "permissions": {

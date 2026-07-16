@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	"github.com/navidrome/navidrome/plugins/pdk/go/host"
-	"github.com/rxtted/navirpc/internal/auth"
-	"github.com/rxtted/navirpc/internal/presence"
+	"atrophy/navirpc/internal/auth"
+	"atrophy/navirpc/internal/presence"
 )
 
 const apiBase = "https://discord.com/api/v10"
