@@ -6,8 +6,9 @@ import (
 	"testing"
 )
 
-// the connect page reimplements render in ts, both sides load these vectors so a
-// key-set or edge change moves the file first and drags the other side with it
+// the vectors live outside this package because the connect page reimplements render in ts
+// against the same file, so an edge or key-set change moves the fixture first and both sides
+// follow. shared with nobody at the minute, the page got deleted out from under it
 func TestRender_SharedVectors(t *testing.T) {
 	b, err := os.ReadFile("../../testdata/template-vectors.json")
 	if err != nil {
@@ -36,7 +37,8 @@ func TestRender_SharedVectors(t *testing.T) {
 	}
 }
 
-// the ts side imports this file as its DEFAULTS const, this pins the go chain to it
+// pins the go defaults to the same fixture the page previews from. without it the card you
+// design and the card you actually get drift apart, which is a miserable bug to chase
 func TestDefaultCard_SharedFixture(t *testing.T) {
 	b, err := os.ReadFile("../../testdata/default-card.json")
 	if err != nil {
