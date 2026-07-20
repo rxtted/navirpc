@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NaviRPC connect</title>
+<style>
+  body { font: 15px/1.5 system-ui, sans-serif; max-width: 40rem; margin: 4rem auto; padding: 0 1rem; }
+  button { font: inherit; padding: .6rem 1rem; cursor: pointer; }
+  textarea { width: 100%; height: 8rem; font-family: monospace; margin-top: .5rem; }
+  .muted { color: #666; }
+  code { background: #f0f0f0; padding: 0 .2rem; }
+  .err { color: #b00; }
+</style>
+</head>
+<body>
+<h1>NaviRPC connect</h1>
+<p class="muted">Authorizes your Discord account and hands back a config value to paste into the Navidrome plugin. The token is exchanged in your browser; nothing is sent to any server but Discord.</p>
+
+<div id="start">
+  <button id="connect">Connect Discord</button>
+</div>
+
+<div id="result" hidden>
+  <p>Paste this into the plugin's <code>users</code> config (as your <code>token</code>):</p>
+  <textarea id="config" readonly></textarea>
+  <button id="copy">Copy</button>
+</div>
+
+<p id="status" class="muted"></p>
+
+<script>
+const CLIENT_ID = "1522831068774924308";
+const SCOPE = "sdk.social_layer_presence";
+const AUTHORIZE = "https://discord.com/oauth2/authorize";
+const TOKEN = "https://discord.com/api/v10/oauth2/token";
+// the redirect must equal this page's own url, registered on the discord app
+const REDIRECT = location.origin + location.pathname;
+
+const $ = id => document.getElementById(id);
+const status = m => $("status").textContent = m;
+const err = m => { $("status").className = "err"; $("status").textContent = m; };
+
+function b64url(bytes) {
+  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+async function sha256(s) {
+  return new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)));
+}
+async function beginAuth() {
+  const verifier = b64url(crypto.getRandomValues(new Uint8Array(32)));
+  const state = b64url(crypto.getRandomValues(new Uint8Array(16)));
+  sessionStorage.setItem("v", verifier);
+  sessionStorage.setItem("s", state);
+  const challenge = b64url(await sha256(verifier));
+  const q = new URLSearchParams({
+    client_id: CLIENT_ID, response_type: "code", scope: SCOPE,
+    redirect_uri: REDIRECT, code_challenge: challenge,
+    code_challenge_method: "S256", state, prompt: "consent",
+  });
+  location.href = AUTHORIZE + "?" + q;
+}
+
+async function finishAuth(code, state) {
+  if (state !== sessionStorage.getItem("s")) { err("State mismatch, start over."); return; }
+  status("Exchanging code...");
+  const body = new URLSearchParams({
+    client_id: CLIENT_ID, grant_type: "authorization_code", code,
+    redirect_uri: REDIRECT, code_verifier: sessionStorage.getItem("v"),
+  });
+  const res = await fetch(TOKEN, {
+    method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body,
+  });
+  const data = await res.json();
+  if (!res.ok) { err("Token exchange failed: " + (data.error_description || data.error || res.status)); return; }
+  const cfg = { token: data.refresh_token, client_id: CLIENT_ID };
+  $("config").value = JSON.stringify(cfg, null, 2);
+  $("start").hidden = true;
+  $("result").hidden = false;
+  status("Done. This value is yours; it never left your browser.");
+  history.replaceState({}, "", REDIRECT); // strip the code from the url bar
+}
+
+$("connect").onclick = () => beginAuth().catch(e => err(String(e)));
+$("copy").onclick = () => { $("config").select(); document.execCommand("copy"); status("Copied."); };
+
+const params = new URLSearchParams(location.search);
+if (params.get("error")) err("Authorization denied: " + params.get("error"));
+else if (params.get("code")) finishAuth(params.get("code"), params.get("state")).catch(e => err(String(e)));
+</script>
+</body>
+</html>
