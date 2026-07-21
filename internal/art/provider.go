@@ -24,6 +24,10 @@ type ProviderConfig struct {
 	Settings map[string]string `json:"settings,omitempty"`
 }
 
+// the chain an instance gets when the admin never touched the setting, exact-match caa
+// first, the itunes catch-all behind it
+var DefaultProviders = []ProviderConfig{{Name: "coverartarchive"}, {Name: "itunes"}}
+
 type factory func(settings map[string]string) (Provider, error)
 
 var registry = map[string]factory{}

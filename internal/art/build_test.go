@@ -19,3 +19,13 @@ func TestBuild(t *testing.T) {
 		t.Fatalf("second provider should be Template, got %T", ps[1])
 	}
 }
+
+func TestDefaultProviders_BuildWhole(t *testing.T) {
+	ps := Build(DefaultProviders)
+	if len(ps) != 2 {
+		t.Fatalf("default chain builds whole: %d providers", len(ps))
+	}
+	if _, ok := ps[0].(CAA); !ok {
+		t.Fatalf("caa leads the default chain: %T", ps[0])
+	}
+}

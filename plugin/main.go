@@ -281,14 +281,13 @@ func parseLook(username, config string) presence.Look {
 
 // an absent or blank setting defaults to caa then itunes, an explicit empty list is no art.
 func configuredArtProviders() []art.ProviderConfig {
-	def := []art.ProviderConfig{{Name: "coverartarchive"}, {Name: "itunes"}}
 	raw, ok := pdk.GetConfig("art_providers")
 	if !ok || raw == "" {
-		return def
+		return art.DefaultProviders
 	}
 	var names []string
 	if json.Unmarshal([]byte(raw), &names) != nil {
-		return def
+		return art.DefaultProviders
 	}
 	cfgs := make([]art.ProviderConfig, 0, len(names))
 	for _, n := range names {
