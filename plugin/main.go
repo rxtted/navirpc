@@ -6,14 +6,15 @@ import (
 	"encoding/json"
 	"time"
 
+	"atrophy/navirpc/internal/art"
+	"atrophy/navirpc/internal/auth"
+	"atrophy/navirpc/internal/discord"
+	"atrophy/navirpc/internal/presence"
 	"github.com/navidrome/navidrome/plugins/pdk/go/host"
 	"github.com/navidrome/navidrome/plugins/pdk/go/lifecycle"
 	"github.com/navidrome/navidrome/plugins/pdk/go/pdk"
 	"github.com/navidrome/navidrome/plugins/pdk/go/scheduler"
 	"github.com/navidrome/navidrome/plugins/pdk/go/scrobbler"
-	"atrophy/navirpc/internal/art"
-	"atrophy/navirpc/internal/auth"
-	"atrophy/navirpc/internal/presence"
 )
 
 const centralClientID = "1522831068774924308"
@@ -141,11 +142,13 @@ func (plugin) PlaybackReport(r scrobbler.PlaybackReportRequest) error {
 	if desired.Seq == 0 {
 		return nil
 	}
-	if _, err := auth.EnsureFresh(r.Username, kvStore{}, discordRefresher{}, time.Now().Unix()); err != nil {
+	s, err := auth.EnsureFresh(r.Username, kvStore{}, discord.Refresher{D: hostDoer{}}, time.Now().Unix())
+	if err != nil {
 		pdk.Log(pdk.LogError, "navirpc: token for "+r.Username+" unusable, reconnect: "+err.Error())
 		return nil
 	}
-	ps, err := presence.Reconcile(r.Username, desired, loadPresence(r.Username), discordPublisher{}, nowMs)
+	creds := presence.Creds{Access: s.Access, ClientID: s.ClientID}
+	ps, err := presence.Reconcile(r.Username, desired, loadPresence(r.Username), discord.Publisher{D: hostDoer{}}, creds, nowMs)
 	if err != nil {
 		pdk.Log(pdk.LogWarn, "navirpc: reconcile for "+r.Username+" failed: "+err.Error())
 	}
@@ -173,7 +176,8 @@ func (plugin) OnCallback(scheduler.SchedulerCallbackRequest) error {
 			continue // no session, nothing to keep alive or clear, only the report path creates one
 		}
 		desired := presence.Desired{Seq: snap.Seq, Kind: snap.LastKind, Act: snap.LastAct}
-		ps, err := presence.Reconcile(u.Username, desired, ps, discordPublisher{}, nowMs)
+		creds := presence.Creds{Access: s.Access, ClientID: s.ClientID}
+		ps, err := presence.Reconcile(u.Username, desired, ps, discord.Publisher{D: hostDoer{}}, creds, nowMs)
 		if err != nil {
 			pdk.Log(pdk.LogWarn, "navirpc: tick for "+u.Username+" failed: "+err.Error())
 		}
