@@ -46,21 +46,25 @@ type userConfig struct {
 	Config   string `json:"config"`
 }
 
-func readUsers() []userConfig {
+// the bool says the config parsed, which is a different question from whether anyone's in
+// it. sounds pedantic until you notice retirement deletes tokens off this answer, and a
+// rotated refresh token is gone for good
+func readUsers() ([]userConfig, bool) {
 	raw, ok := pdk.GetConfig("users")
 	if !ok || raw == "" {
-		return nil
+		return nil, false
 	}
 	var users []userConfig
 	if json.Unmarshal([]byte(raw), &users) != nil {
 		pdk.Log(pdk.LogWarn, "navirpc: users config is not a json array")
-		return nil
+		return nil, false
 	}
-	return users
+	return users, true
 }
 
 func findUser(username string) (userConfig, bool) {
-	for _, u := range readUsers() {
+	users, _ := readUsers()
+	for _, u := range users {
 		if u.Username == username {
 			return u, true
 		}
@@ -71,8 +75,9 @@ func findUser(username string) (userConfig, bool) {
 func (plugin) OnInit() error {
 	store := kvStore{}
 	nowMs := time.Now().UnixMilli()
+	users, readable := readUsers()
 	configured := map[string]bool{}
-	for _, u := range readUsers() {
+	for _, u := range users {
 		configured[u.Username] = true
 		// an own-app token carries its own client_id and wins, else the central app
 		seed, clientID := authFrom(u.Token)
@@ -91,10 +96,9 @@ func (plugin) OnInit() error {
 				pdk.Log(pdk.LogWarn, "navirpc: could not persist token for "+u.Username+": "+err.Error())
 			}
 		}
-		// a reboot mid-play is a stop nobody reported. this used to delete the stored
-		// state outright, which threw away the one handle that could take the card down,
-		// so arm the clear instead and let the machinery that makes stops reliable do
-		// reboots too
+		// don't be tempted to delete the state here, the stored session token is the only
+		// handle that can take the card down and without it it just sits there till the
+		// TTL reaps it
 		st := loadSnapshot(u.Username)
 		if st.LastKind != "" {
 			us := presence.RestoreUserState(clearDebounceMs, st.Snapshot)
@@ -104,16 +108,19 @@ func (plugin) OnInit() error {
 			saveSnapshot(u.Username, st)
 		}
 	}
-	retireAbsent(configured)
+	// an unreadable config is not an empty one, and treating it as one would nuke every
+	// token in the store over a single typo
+	if readable {
+		retireAbsent(configured)
+	}
 	if _, err := host.SchedulerScheduleRecurring(tickCron, "", "keepalive"); err != nil {
 		pdk.Log(pdk.LogWarn, "navirpc: scheduler register failed: "+err.Error())
 	}
 	return nil
 }
 
-// pulling someone out of the config should stop their presence, and until this existed it
-// didnt, their stored token just kept broadcasting. nothing ever ticks an unconfigured user
-// so the armed clear cant reach them, removal is the one path that deletes inline
+// nothing ever ticks an unconfigured user, so there's no later pass to lean on. this is the
+// one shot at taking their card down, miss it and it hangs about till the TTL
 func retireAbsent(configured map[string]bool) {
 	keys, err := host.KVStoreList("presence:")
 	if err != nil {
@@ -218,7 +225,8 @@ func (plugin) PlaybackReport(r scrobbler.PlaybackReportRequest) error {
 func (plugin) OnCallback(scheduler.SchedulerCallbackRequest) error {
 	nowMs := time.Now().UnixMilli()
 	nowUnix := time.Now().Unix()
-	for _, u := range readUsers() {
+	users, _ := readUsers()
+	for _, u := range users {
 		snap := loadSnapshot(u.Username)
 		if snap.LastKind == "" {
 			continue // nothing active to keep alive
