@@ -31,7 +31,11 @@ func EnsureFresh(userID string, store TokenStore, rf Refresher, now int64) (Stor
 	if err != nil {
 		if errors.Is(err, ErrInvalidGrant) {
 			cur.Dead = true
-			_ = store.Save(userID, cur)
+			// a lost dead flag means every report retries the doomed refresh forever,
+			// so a failed save rides out with the sentinel instead of vanishing
+			if saveErr := store.Save(userID, cur); saveErr != nil {
+				return cur, errors.Join(ErrInvalidGrant, saveErr)
+			}
 			return cur, ErrInvalidGrant
 		}
 		return Stored{}, err

@@ -79,3 +79,13 @@ func TestEnsureFresh_InvalidGrantMarksDead(t *testing.T) {
 		t.Fatal("dead flag must be persisted")
 	}
 }
+
+func TestEnsureFresh_DeadMarkSaveFailureSurfaces(t *testing.T) {
+	diskErr := errors.New("disk full")
+	store := &fakeStore{s: Stored{Refresh: "rt", ExpiresAt: 0}, ok: true, saveErr: diskErr}
+	rf := &fakeRefresher{err: ErrInvalidGrant}
+	_, err := EnsureFresh("u", store, rf, 1000)
+	if !errors.Is(err, ErrInvalidGrant) || !errors.Is(err, diskErr) {
+		t.Fatalf("dead-mark save failure rides with the sentinel: %v", err)
+	}
+}
