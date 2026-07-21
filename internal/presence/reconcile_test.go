@@ -185,3 +185,16 @@ func TestReconcile_ClearDefersPastBucket(t *testing.T) {
 		t.Fatalf("a clear past the real bucket waits for the tick: ps=%+v pub=%+v", ps, pub)
 	}
 }
+
+func TestReconcile_ClearHonorsRetryAfterWindow(t *testing.T) {
+	pub := &fakePub{}
+	ps := PubState{PublishedSeq: 5, SessionToken: "sess", RateLimitedUntil: 9000}
+	ps, err := Reconcile("u", Desired{Seq: 6, Kind: "clear"}, ps, pub, Creds{}, 1000)
+	if err != nil || len(pub.cleared) != 0 || ps.SessionToken != "sess" {
+		t.Fatalf("a clear waits out discords own window: ps=%+v pub=%+v", ps, pub)
+	}
+	ps, _ = Reconcile("u", Desired{Seq: 6, Kind: "clear"}, ps, pub, Creds{}, 9001)
+	if len(pub.cleared) != 1 {
+		t.Fatalf("the window passed, the clear goes: %+v", pub.cleared)
+	}
+}

@@ -30,18 +30,23 @@ type Publisher interface {
 }
 
 type PubState struct {
-	PublishedSeq  int64
-	SessionToken  string
-	LastPublishMs int64
-	PublishTimes  []int64 // recent publish timestamps, for the rate window
-	BackoffUntil  int64
-	Fails         int
+	PublishedSeq     int64
+	SessionToken     string
+	LastPublishMs    int64
+	PublishTimes     []int64 // recent publish timestamps, for the rate window
+	BackoffUntil     int64
+	RateLimitedUntil int64 // discords own 429 window, the one wait even a clear honours
+	Fails            int
 }
 
 // newer-event-wins. the caller persists the returned state, published seq, backoff, session token.
 func Reconcile(userID string, d Desired, ps PubState, pub Publisher, c Creds, nowMs int64) (PubState, error) {
-	// a clear is exempt from backoff, as it is from the throttle, so a stop is never left
-	// stuck behind a transient publish failure showing a stale card.
+	// a clear skips the exponential backoff so a stop is never left stuck behind a
+	// transient publish failure showing a stale card. discords 429 window is
+	// different, thats not really our guess to override, everything waits it out :c
+	if nowMs < ps.RateLimitedUntil {
+		return ps, nil
+	}
 	if d.Kind != "clear" && nowMs < ps.BackoffUntil {
 		return ps, nil
 	}
@@ -82,6 +87,7 @@ func Reconcile(userID string, d Desired, ps PubState, pub Publisher, c Creds, no
 		var ra retryAfterErr
 		if errors.As(err, &ra) && ra.RetryAfterMs() > 0 {
 			ps.BackoffUntil = nowMs + ra.RetryAfterMs()
+			ps.RateLimitedUntil = ps.BackoffUntil
 		} else {
 			ps.BackoffUntil = nowMs + backoffMs(ps.Fails)
 		}
@@ -94,6 +100,7 @@ func Reconcile(userID string, d Desired, ps PubState, pub Publisher, c Creds, no
 	}
 	ps.Fails = 0
 	ps.BackoffUntil = 0
+	ps.RateLimitedUntil = 0
 	ps.LastPublishMs = nowMs
 	if d.Kind == "clear" {
 		ps.SessionToken = ""
