@@ -11,7 +11,16 @@ package: build
 test:
 	go test ./internal/...
 
+setup:
+	git config core.hooksPath .githooks
+
+hygiene:
+	@stray=$$(find . -name '*.go' -not -path './internal/*' -not -path './plugin/*' -not -path './.git/*'); \
+	if [ -n "$$stray" ]; then echo "go files outside internal/ and plugin/: $$stray" >&2; exit 1; fi
+	@bins=$$(git ls-files '*.wasm' '*.ndp'); \
+	if [ -n "$$bins" ]; then echo "tracked binaries: $$bins" >&2; exit 1; fi
+
 clean:
 	rm -f $(WASM) $(NDP)
 
-.PHONY: build package test clean
+.PHONY: build package test setup hygiene clean

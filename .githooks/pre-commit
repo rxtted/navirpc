@@ -1,0 +1,32 @@
+#!/bin/sh
+set -e
+
+gitdir=$(git rev-parse --git-dir)
+if [ -d "$gitdir/rebase-merge" ] || [ -d "$gitdir/rebase-apply" ]; then
+	exit 0
+fi
+
+fmt=$(go tool gofumpt -l .)
+if [ -n "$fmt" ]; then
+	echo "gofumpt wants: $fmt" >&2
+	exit 1
+fi
+
+go vet ./internal/...
+GOOS=wasip1 GOARCH=wasm go vet ./plugin/
+
+fix=$(go fix -diff ./internal/... 2>&1)
+if [ -n "$fix" ]; then
+	echo "go fix has pending rewrites, run go fix ./internal/..." >&2
+	exit 1
+fi
+
+go mod tidy -diff
+
+golangci-lint run ./...
+GOOS=wasip1 GOARCH=wasm golangci-lint run ./plugin/...
+
+go test ./internal/...
+GOOS=wasip1 GOARCH=wasm go build -buildmode=c-shared -o /dev/null ./plugin
+
+make -s hygiene
