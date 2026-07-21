@@ -124,21 +124,35 @@ func TestState_SeekReemits(t *testing.T) {
 	}
 }
 
-func TestState_RestoredPlayArmsClearOnce(t *testing.T) {
-	live := NewUserState(0)
-	live.OnReport("playing", Activity{Name: "Saosin"}, 1000)
-	snap := live.Snapshot()
+func playing(t *testing.T) Snapshot {
+	t.Helper()
+	us := NewUserState(0)
+	us.OnReport("playing", Activity{Name: "Saosin"}, 1000)
+	return us.Snapshot()
+}
 
-	us := RestoreUserState(0, snap)
-	us.OnReport("stopped", Activity{}, 2000)
-	d, ok := us.Due(2000)
-	if !ok || d.Kind != "clear" || d.Seq != snap.Seq+1 {
-		t.Fatalf("restored play arms a clear: ok=%v %+v snap=%d", ok, d, snap.Seq)
+func TestArmClear_ArmsFromPlay(t *testing.T) {
+	snap := playing(t)
+	next, armed := ArmClear(0, snap, snap.Seq, 2000)
+	if !armed || next.LastKind != "clear" || next.Seq != snap.Seq+1 {
+		t.Fatalf("play arms a clear: armed=%v %+v", armed, next)
 	}
+}
 
-	again := RestoreUserState(0, us.Snapshot())
-	again.OnReport("stopped", Activity{}, 3000)
-	if _, ok := again.Due(3000); ok {
-		t.Fatalf("re-arming an armed clear: %+v", again.Snapshot())
+func TestArmClear_OutranksAPublishedSeq(t *testing.T) {
+	snap := playing(t)
+	next, armed := ArmClear(0, snap, snap.Seq+4, 2000)
+	if !armed || next.Seq <= snap.Seq+4 {
+		t.Fatalf("clear must outrank what was published: armed=%v seq=%d published=%d", armed, next.Seq, snap.Seq+4)
+	}
+}
+
+func TestArmClear_NothingToArm(t *testing.T) {
+	if _, armed := ArmClear(0, Snapshot{}, 0, 2000); armed {
+		t.Fatal("empty snapshot arms nothing")
+	}
+	armedOnce, _ := ArmClear(0, playing(t), 0, 2000)
+	if _, again := ArmClear(0, armedOnce, 0, 3000); again {
+		t.Fatalf("re-arming an armed clear: %+v", armedOnce)
 	}
 }

@@ -64,6 +64,14 @@ func TestPublish_NonSuccessErrors(t *testing.T) {
 	}
 }
 
+func TestPublish_NoAccessTokenErrors(t *testing.T) {
+	f := &fakeDoer{}
+	_, err := Publisher{D: f}.Publish("noah", presence.Desired{}, "", presence.Creds{ClientID: "app1"})
+	if err == nil || f.got.URL != "" {
+		t.Fatalf("no bearer, no request: err=%v url=%q", err, f.got.URL)
+	}
+}
+
 func TestClear_NoSessionIsNoop(t *testing.T) {
 	f := &fakeDoer{}
 	if err := (Publisher{D: f}.Clear("noah", "", creds())); err != nil || f.got.URL != "" {

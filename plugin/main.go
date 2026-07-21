@@ -100,11 +100,8 @@ func (plugin) OnInit() error {
 		// handle that can take the card down and without it it just sits there till the
 		// TTL reaps it
 		st := loadSnapshot(u.Username)
-		if st.LastKind != "" {
-			us := presence.RestoreUserState(clearDebounceMs, st.Snapshot)
-			us.OnReport("stopped", presence.Activity{}, nowMs)
-			us.Due(nowMs) // dropping both returns looks wrong, the seq bump is the whole point
-			st.Snapshot = us.Snapshot()
+		if snap, armed := presence.ArmClear(clearDebounceMs, st.Snapshot, loadPresence(u.Username).PublishedSeq, nowMs); armed {
+			st.Snapshot = snap
 			saveSnapshot(u.Username, st)
 		}
 	}
@@ -122,34 +119,42 @@ func (plugin) OnInit() error {
 // nothing ever ticks an unconfigured user, so there's no later pass to lean on. this is the
 // one shot at taking their card down, miss it and it hangs about till the TTL
 func retireAbsent(configured map[string]bool) {
-	keys, err := host.KVStoreList("presence:")
+	keys, err := listKeys("presence:")
 	if err != nil {
 		return
 	}
+	// a user whose clear didnt land keeps their keys. delete the token here and you've
+	// binned the only credential a retry could ever use, which is a daft way to lose a card.
+	// discord counts a clear against a dead session as success, so this stops on its own
+	retry := map[string]bool{}
 	for _, k := range keys {
 		user := strings.TrimPrefix(k, "presence:")
 		if configured[user] {
+			continue
+		}
+		ps := loadPresence(user)
+		if ps.SessionToken == "" {
 			continue
 		}
 		s, ok := kvStore{}.Load(user)
 		if !ok || s.Access == "" {
 			continue
 		}
-		if ps := loadPresence(user); ps.SessionToken != "" {
-			creds := presence.Creds{Access: s.Access, ClientID: s.ClientID}
-			if err := (discord.Publisher{D: hostDoer{}}).Clear(user, ps.SessionToken, creds); err != nil {
-				pdk.Log(pdk.LogWarn, "navirpc: could not clear the card for retired user "+user+": "+err.Error())
-			}
+		creds := presence.Creds{Access: s.Access, ClientID: s.ClientID}
+		if err := (discord.Publisher{D: hostDoer{}}).Clear(user, ps.SessionToken, creds); err != nil {
+			pdk.Log(pdk.LogWarn, "navirpc: could not clear the card for retired user "+user+", keeping their state to retry: "+err.Error())
+			retry[user] = true
 		}
 	}
 	for _, prefix := range []string{"token:", "playback:", "presence:"} {
-		keys, err := host.KVStoreList(prefix)
+		keys, err := listKeys(prefix)
 		if err != nil {
 			continue
 		}
 		for _, k := range keys {
-			if !configured[strings.TrimPrefix(k, prefix)] {
-				_ = host.KVStoreDelete(k)
+			user := strings.TrimPrefix(k, prefix)
+			if !configured[user] && !retry[user] {
+				deleteKey(k)
 			}
 		}
 	}
@@ -170,16 +175,19 @@ func authFrom(token string) (seed, clientID string) {
 
 func (plugin) PlaybackReport(r scrobbler.PlaybackReportRequest) error {
 	nowMs := time.Now().UnixMilli()
+	// bail before touching the store, a trailing stop from someone just pulled out of the
+	// config would otherwise recreate the keys the sweep just took, and the sweep only runs
+	// on init so theyd sit there till the next restart. miserable thing to track down
+	u, ok := findUser(r.Username)
+	if !ok {
+		return nil
+	}
 	st := loadSnapshot(r.Username)
 	us := presence.RestoreUserState(clearDebounceMs, st.Snapshot)
 
 	var desired presence.Desired
 	switch r.State {
 	case "playing", "starting":
-		u, ok := findUser(r.Username)
-		if !ok {
-			return nil // gone from config, the authorization gate catches this first, belt and braces
-		}
 		l := parseLook(r.Username, u.Config)
 		tk := track(r)
 		act := presence.Map(tk, l.Prefs(), r.PositionMs, nowMs)

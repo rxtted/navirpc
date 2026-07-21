@@ -28,9 +28,13 @@ func (f *fakePub) Clear(_, sessionToken string, c Creds) error {
 
 func TestReconcile_PublishesNewer(t *testing.T) {
 	pub := &fakePub{session: "sess"}
-	ps, err := Reconcile("u", Desired{Seq: 5, Kind: "play"}, PubState{PublishedSeq: 2}, pub, Creds{}, 1000)
+	creds := Creds{Access: "at", ClientID: "app1"}
+	ps, err := Reconcile("u", Desired{Seq: 5, Kind: "play"}, PubState{PublishedSeq: 2}, pub, creds, 1000)
 	if err != nil || len(pub.published) != 1 || ps.PublishedSeq != 5 || ps.SessionToken != "sess" {
 		t.Fatalf("should publish and advance: ps=%+v pub=%+v", ps, pub)
+	}
+	if len(pub.gotCreds) != 1 || pub.gotCreds[0] != creds {
+		t.Fatalf("creds reach the publisher unchanged: %+v", pub.gotCreds)
 	}
 }
 
@@ -76,9 +80,13 @@ func TestReconcile_NoKeepaliveWithinWindow(t *testing.T) {
 
 func TestReconcile_ClearUsesSessionToken(t *testing.T) {
 	pub := &fakePub{}
-	ps, err := Reconcile("u", Desired{Seq: 6, Kind: "clear"}, PubState{PublishedSeq: 5, SessionToken: "sess"}, pub, Creds{}, 1000)
+	creds := Creds{Access: "at", ClientID: "app1"}
+	ps, err := Reconcile("u", Desired{Seq: 6, Kind: "clear"}, PubState{PublishedSeq: 5, SessionToken: "sess"}, pub, creds, 1000)
 	if err != nil || len(pub.cleared) != 1 || pub.cleared[0] != "sess" || ps.SessionToken != "" {
 		t.Fatalf("clear should call Clear with the session and reset it: ps=%+v pub=%+v", ps, pub)
+	}
+	if len(pub.gotCreds) != 1 || pub.gotCreds[0] != creds {
+		t.Fatalf("creds reach the clear unchanged: %+v", pub.gotCreds)
 	}
 }
 

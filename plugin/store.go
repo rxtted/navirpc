@@ -59,6 +59,14 @@ func saveSnapshot(username string, st playbackState) {
 	}
 }
 
+func listKeys(prefix string) ([]string, error) {
+	return host.KVStoreList(prefix)
+}
+
+func deleteKey(key string) {
+	_ = host.KVStoreDelete(key)
+}
+
 func loadPresence(username string) presence.PubState {
 	var ps presence.PubState
 	if b, ok, err := host.KVStoreGet("presence:" + username); err == nil && ok {

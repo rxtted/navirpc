@@ -26,6 +26,16 @@ func TestToWire_FiltersHalfEmptyButtons(t *testing.T) {
 	}
 }
 
+func TestToWire_CarriesTheAssets(t *testing.T) {
+	wa := toWire(presence.Activity{
+		LargeImage: "https://cover", LargeText: "the album",
+		SmallImage: "https://icon", SmallText: "navidrome",
+	}, "")
+	if wa.Assets == nil || wa.Assets.LargeImage != "https://cover" || wa.Assets.SmallText != "navidrome" {
+		t.Fatalf("assets populated: %+v", wa.Assets)
+	}
+}
+
 func TestToWire_TimestampsWhenEitherSet(t *testing.T) {
 	wa := toWire(presence.Activity{Start: 100}, "")
 	if wa.Timestamps == nil || wa.Timestamps.Start != 100 {

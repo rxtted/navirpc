@@ -63,6 +63,29 @@ func (s *UserState) Due(nowMs int64) (Desired, bool) {
 	return Desired{}, false
 }
 
+// records a clear for a caller with no report to drive it, a restart being the case that
+// matters. it has to outrank whatever was already published or the reconciler bins it as
+// stale, and since keepalive skips a clear the card is then stuck with nothing left to
+// refresh it and nothing left to take it down, which is the worst of both. the bool is
+// false when there was nothing to arm
+func ArmClear(debounceMs int64, snap Snapshot, publishedSeq, nowMs int64) (Snapshot, bool) {
+	if snap.LastKind == "" {
+		return snap, false
+	}
+	base := snap
+	if publishedSeq > base.Seq {
+		base.Seq = publishedSeq
+	}
+	us := RestoreUserState(debounceMs, base)
+	us.OnReport("stopped", Activity{}, nowMs)
+	us.Due(nowMs)
+	next := us.Snapshot()
+	if next.Seq == base.Seq {
+		return snap, false
+	}
+	return next, true
+}
+
 // the serializable form of a UserState. the plugin gets a fresh wasm instance per call,
 // so this round-trips through the kv-store between reports.
 type Snapshot struct {

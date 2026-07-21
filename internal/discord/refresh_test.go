@@ -31,6 +31,14 @@ func TestRefresh_ServerErrorIsTransient(t *testing.T) {
 	}
 }
 
+func TestRefresh_MalformedBodyErrors(t *testing.T) {
+	f := &fakeDoer{resp: Response{StatusCode: 200, Body: []byte(`{"access_token":`)}}
+	access, _, _, err := Refresher{D: f}.Refresh("app1", "rt1")
+	if err == nil || access != "" {
+		t.Fatalf("unparseable 200 is an error: access=%q err=%v", access, err)
+	}
+}
+
 func TestRefresh_TransportErrorPropagates(t *testing.T) {
 	f := &fakeDoer{err: errors.New("dial timeout")}
 	if _, _, _, err := (Refresher{D: f}.Refresh("app1", "rt1")); err == nil {
