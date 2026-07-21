@@ -123,3 +123,22 @@ func TestState_SeekReemits(t *testing.T) {
 		t.Fatalf("a seek should re-emit with a new seq: ok=%v %d -> %d", ok, d1.Seq, d2.Seq)
 	}
 }
+
+func TestState_RestoredPlayArmsClearOnce(t *testing.T) {
+	live := NewUserState(0)
+	live.OnReport("playing", Activity{Name: "Saosin"}, 1000)
+	snap := live.Snapshot()
+
+	us := RestoreUserState(0, snap)
+	us.OnReport("stopped", Activity{}, 2000)
+	d, ok := us.Due(2000)
+	if !ok || d.Kind != "clear" || d.Seq != snap.Seq+1 {
+		t.Fatalf("restored play arms a clear: ok=%v %+v snap=%d", ok, d, snap.Seq)
+	}
+
+	again := RestoreUserState(0, us.Snapshot())
+	again.OnReport("stopped", Activity{}, 3000)
+	if _, ok := again.Due(3000); ok {
+		t.Fatalf("re-arming an armed clear: %+v", again.Snapshot())
+	}
+}

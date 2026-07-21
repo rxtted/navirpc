@@ -5,9 +5,9 @@ package main
 import (
 	"encoding/json"
 
-	"github.com/navidrome/navidrome/plugins/pdk/go/host"
 	"atrophy/navirpc/internal/auth"
 	"atrophy/navirpc/internal/presence"
+	"github.com/navidrome/navidrome/plugins/pdk/go/host"
 )
 
 // kvStore adapts navidrome's kv-store to auth.TokenStore, keyed per navidrome user.
@@ -71,9 +71,4 @@ func savePresence(username string, ps presence.PubState) {
 	if b, err := json.Marshal(ps); err == nil {
 		_ = host.KVStoreSet("presence:"+username, b)
 	}
-}
-
-func clearState(username string) {
-	_ = host.KVStoreDelete("playback:" + username)
-	_ = host.KVStoreDelete("presence:" + username)
 }

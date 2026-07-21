@@ -69,6 +69,7 @@ func findUser(username string) (userConfig, bool) {
 
 func (plugin) OnInit() error {
 	store := kvStore{}
+	nowMs := time.Now().UnixMilli()
 	for _, u := range readUsers() {
 		// an own-app token carries its own client_id and wins, else the central app
 		seed, clientID := authFrom(u.Token)
@@ -87,7 +88,18 @@ func (plugin) OnInit() error {
 				pdk.Log(pdk.LogWarn, "navirpc: could not persist token for "+u.Username+": "+err.Error())
 			}
 		}
-		clearState(u.Username) // drop stale playback/presence so the first report starts fresh
+		// a reboot mid-play is a stop nobody reported. this used to delete the stored
+		// state outright, which threw away the one handle that could take the card down,
+		// so arm the clear instead and let the machinery that makes stops reliable do
+		// reboots too
+		st := loadSnapshot(u.Username)
+		if st.LastKind != "" {
+			us := presence.RestoreUserState(clearDebounceMs, st.Snapshot)
+			us.OnReport("stopped", presence.Activity{}, nowMs)
+			us.Due(nowMs) // dropping both returns looks wrong, the seq bump is the whole point
+			st.Snapshot = us.Snapshot()
+			saveSnapshot(u.Username, st)
+		}
 	}
 	if _, err := host.SchedulerScheduleRecurring(tickCron, "", "keepalive"); err != nil {
 		pdk.Log(pdk.LogWarn, "navirpc: scheduler register failed: "+err.Error())
