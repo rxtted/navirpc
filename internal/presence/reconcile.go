@@ -11,6 +11,7 @@ const keepaliveMs = 15 * 60 * 1000
 const (
 	rateWindowMs = 20000
 	rateMax      = 4
+	rateBucket   = 5 // discord's actual limit, clears may spend the last slot publishes wont
 )
 
 // a Publish error may carry discord's rate-limit window, honoured over the generic backoff.
@@ -55,10 +56,15 @@ func Reconcile(userID string, d Desired, ps PubState, pub Publisher, c Creds, no
 		return ps, nil
 	}
 
-	// throttle publishes to the rate window. clears are exempt so a stop is never stuck
-	// behind the throttle. a throttled publish is retried by a later report.
+	// throttle to the rate window. a clear outranks publishes and gets the whole real
+	// bucket, past that even a stop waits for the next tick rather than earning a 429.
+	// a throttled publish is retried by a later report.
 	ps.PublishTimes = recentTimes(ps.PublishTimes, nowMs-rateWindowMs)
-	if d.Kind != "clear" && len(ps.PublishTimes) >= rateMax {
+	limit := rateMax
+	if d.Kind == "clear" {
+		limit = rateBucket
+	}
+	if len(ps.PublishTimes) >= limit {
 		return ps, nil
 	}
 

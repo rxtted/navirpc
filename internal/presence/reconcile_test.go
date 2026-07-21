@@ -139,7 +139,7 @@ func TestReconcile_ThrottlesBurst(t *testing.T) {
 	seq++
 	ps, _ = Reconcile("u", Desired{Seq: seq, Kind: "clear"}, ps, pub, Creds{}, 1000)
 	if len(pub.cleared) != 1 {
-		t.Fatalf("clear should be exempt from the throttle: %+v", pub.cleared)
+		t.Fatalf("clear gets the fifth slot: %+v", pub.cleared)
 	}
 	seq++
 	_, _ = Reconcile("u", Desired{Seq: seq, Kind: "play"}, ps, pub, Creds{}, 1000+rateWindowMs+1)
@@ -174,5 +174,14 @@ func TestReconcile_ClearBypassesBackoff(t *testing.T) {
 	_, _ = Reconcile("u", Desired{Seq: 6, Kind: "clear"}, PubState{PublishedSeq: 5, SessionToken: "sess", BackoffUntil: 9000}, pub, Creds{}, 1000)
 	if len(pub.cleared) != 1 {
 		t.Fatalf("a clear must bypass backoff and still attempt: %+v", pub.cleared)
+	}
+}
+
+func TestReconcile_ClearDefersPastBucket(t *testing.T) {
+	pub := &fakePub{}
+	full := PubState{PublishedSeq: 5, SessionToken: "sess", PublishTimes: []int64{1, 2, 3, 4, 5}}
+	ps, err := Reconcile("u", Desired{Seq: 6, Kind: "clear"}, full, pub, Creds{}, 1000)
+	if err != nil || len(pub.cleared) != 0 || ps.SessionToken != "sess" {
+		t.Fatalf("a clear past the real bucket waits for the tick: ps=%+v pub=%+v", ps, pub)
 	}
 }
