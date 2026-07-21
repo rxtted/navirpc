@@ -82,3 +82,57 @@ func TestClear_NoSessionIsNoop(t *testing.T) {
 		t.Fatalf("no session, no call: err=%v url=%q", err, f.got.URL)
 	}
 }
+
+func TestClear_Succeeds(t *testing.T) {
+	f := &fakeDoer{resp: Response{StatusCode: 204}}
+	if err := (Publisher{D: f}).Clear("noah", "sess1", creds()); err != nil {
+		t.Fatalf("204 clears: %v", err)
+	}
+}
+
+func TestClear_RateLimitSurfaces(t *testing.T) {
+	f := &fakeDoer{resp: Response{StatusCode: 429, Headers: map[string]string{"retry-after": "2"}}}
+	err := Publisher{D: f}.Clear("noah", "sess1", creds())
+	var rl interface{ RetryAfterMs() int64 }
+	if !errors.As(err, &rl) || rl.RetryAfterMs() != 2000 {
+		t.Fatalf("429 surfaces the window: %v", err)
+	}
+}
+
+func TestClear_UnaddressableTokenDrops(t *testing.T) {
+	f := &fakeDoer{resp: Response{StatusCode: 400, Body: []byte(`{"code":50014}`)}}
+	if err := (Publisher{D: f}).Clear("noah", "sess1", creds()); err != nil {
+		t.Fatalf("a 400 token can never delete anything, drop it: %v", err)
+	}
+}
+
+func TestClear_ServerErrorRetries(t *testing.T) {
+	f := &fakeDoer{resp: Response{StatusCode: 500}}
+	if err := (Publisher{D: f}).Clear("noah", "sess1", creds()); err == nil {
+		t.Fatal("500 errors so the tick retries")
+	}
+}
+
+func TestPublish_CreateWithoutTokenErrors(t *testing.T) {
+	f := &fakeDoer{resp: Response{StatusCode: 200, Body: []byte(`{}`)}}
+	_, err := Publisher{D: f}.Publish("noah", presence.Desired{}, "", creds())
+	if err == nil {
+		t.Fatal("a create with no handle is a failure, not a success")
+	}
+}
+
+func TestPublish_CreateGarbageBodyErrors(t *testing.T) {
+	f := &fakeDoer{resp: Response{StatusCode: 200, Body: []byte(`not json`)}}
+	_, err := Publisher{D: f}.Publish("noah", presence.Desired{}, "", creds())
+	if err == nil {
+		t.Fatal("an unparseable create is a failure")
+	}
+}
+
+func TestPublish_UpdateSurvivesGarbageBody(t *testing.T) {
+	f := &fakeDoer{resp: Response{StatusCode: 200, Body: []byte(`not json`)}}
+	got, err := Publisher{D: f}.Publish("noah", presence.Desired{}, "sess1", creds())
+	if err != nil || got != "sess1" {
+		t.Fatalf("held token survives a garbage update body: got=%q err=%v", got, err)
+	}
+}

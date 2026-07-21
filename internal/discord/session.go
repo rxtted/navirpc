@@ -37,11 +37,16 @@ func (p Publisher) Publish(user string, d presence.Desired, sessionToken string,
 	var out struct {
 		Token string `json:"token"`
 	}
-	json.Unmarshal(resp.Body, &out) //nolint:errcheck // a bad body falls through to the held token below, dont add the check without reading the create path first
-	if out.Token != "" {
-		return out.Token, nil
+	if err := json.Unmarshal(resp.Body, &out); err != nil || out.Token == "" {
+		if sessionToken == "" {
+			// the create succeeded at discord but handed back no usable handle, record
+			// failure so the reconciler retries rather than recording a session it can
+			// never update or delete
+			return "", errors.New("create returned no session token")
+		}
+		return sessionToken, nil // an update, the held token stays valid regardless
 	}
-	return sessionToken, nil
+	return out.Token, nil
 }
 
 func (p Publisher) Clear(_, sessionToken string, c presence.Creds) error {
@@ -49,8 +54,21 @@ func (p Publisher) Clear(_, sessionToken string, c presence.Creds) error {
 		return nil
 	}
 	body, _ := json.Marshal(map[string]string{"token": sessionToken})
-	_, err := p.post("/users/@me/headless-sessions/delete", c.Access, body)
-	return err
+	resp, err := p.post("/users/@me/headless-sessions/delete", c.Access, body)
+	if err != nil {
+		return err
+	}
+	switch {
+	case resp.StatusCode == 429:
+		return rateLimited{ms: retryAfterMs(resp.Headers)}
+	case resp.StatusCode == 400:
+		// a 400 here is 50014 invalid token, unaddressable and never going to
+		// work on a retry. drop the handle, a real session ttls out on its own
+		return nil
+	case resp.StatusCode < 200 || resp.StatusCode >= 300:
+		return errors.New("headless-session delete http " + strconv.Itoa(resp.StatusCode))
+	}
+	return nil
 }
 
 func (p Publisher) post(path, bearer string, body []byte) (Response, error) {
