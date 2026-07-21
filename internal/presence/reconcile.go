@@ -16,9 +16,16 @@ const (
 // a Publish error may carry discord's rate-limit window, honoured over the generic backoff.
 type retryAfterErr interface{ RetryAfterMs() int64 }
 
+// the caller proves it ran the refresh by handing the creds over, the publisher
+// never reaches into storage for them
+type Creds struct {
+	Access   string
+	ClientID string
+}
+
 type Publisher interface {
-	Publish(userID string, d Desired, sessionToken string) (newSessionToken string, err error)
-	Clear(userID, sessionToken string) error
+	Publish(userID string, d Desired, sessionToken string, c Creds) (newSessionToken string, err error)
+	Clear(userID, sessionToken string, c Creds) error
 }
 
 type PubState struct {
@@ -31,7 +38,7 @@ type PubState struct {
 }
 
 // newer-event-wins. the caller persists the returned state, published seq, backoff, session token.
-func Reconcile(userID string, d Desired, ps PubState, pub Publisher, nowMs int64) (PubState, error) {
+func Reconcile(userID string, d Desired, ps PubState, pub Publisher, c Creds, nowMs int64) (PubState, error) {
 	// a clear is exempt from backoff, as it is from the throttle, so a stop is never left
 	// stuck behind a transient publish failure showing a stale card.
 	if d.Kind != "clear" && nowMs < ps.BackoffUntil {
@@ -60,9 +67,9 @@ func Reconcile(userID string, d Desired, ps PubState, pub Publisher, nowMs int64
 		err     error
 	)
 	if d.Kind == "clear" {
-		err = pub.Clear(userID, ps.SessionToken)
+		err = pub.Clear(userID, ps.SessionToken, c)
 	} else {
-		session, err = pub.Publish(userID, d, ps.SessionToken)
+		session, err = pub.Publish(userID, d, ps.SessionToken, c)
 	}
 	if err != nil {
 		ps.Fails++
