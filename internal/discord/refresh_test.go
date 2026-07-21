@@ -41,7 +41,8 @@ func TestRefresh_MalformedBodyErrors(t *testing.T) {
 
 func TestRefresh_TransportErrorPropagates(t *testing.T) {
 	f := &fakeDoer{err: errors.New("dial timeout")}
-	if _, _, _, err := (Refresher{D: f}.Refresh("app1", "rt1")); err == nil {
+	_, _, _, err := Refresher{D: f}.Refresh("app1", "rt1")
+	if err == nil {
 		t.Fatal("transport failure surfaces")
 	}
 }

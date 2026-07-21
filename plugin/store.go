@@ -48,7 +48,7 @@ type playbackState struct {
 func loadSnapshot(username string) playbackState {
 	var st playbackState
 	if b, ok, err := host.KVStoreGet("playback:" + username); err == nil && ok {
-		json.Unmarshal(b, &st)
+		json.Unmarshal(b, &st) //nolint:errcheck // corrupt bytes must read as empty state, theres no error path out of a report
 	}
 	return st
 }
@@ -70,7 +70,7 @@ func deleteKey(key string) {
 func loadPresence(username string) presence.PubState {
 	var ps presence.PubState
 	if b, ok, err := host.KVStoreGet("presence:" + username); err == nil && ok {
-		json.Unmarshal(b, &ps)
+		json.Unmarshal(b, &ps) //nolint:errcheck // dont error out here, a wedged record would stick forever, nothing else deletes this key
 	}
 	return ps
 }

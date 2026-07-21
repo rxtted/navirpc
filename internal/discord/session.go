@@ -37,14 +37,14 @@ func (p Publisher) Publish(user string, d presence.Desired, sessionToken string,
 	var out struct {
 		Token string `json:"token"`
 	}
-	json.Unmarshal(resp.Body, &out)
+	json.Unmarshal(resp.Body, &out) //nolint:errcheck // a bad body falls through to the held token below, dont add the check without reading the create path first
 	if out.Token != "" {
 		return out.Token, nil
 	}
 	return sessionToken, nil
 }
 
-func (p Publisher) Clear(user, sessionToken string, c presence.Creds) error {
+func (p Publisher) Clear(_, sessionToken string, c presence.Creds) error {
 	if sessionToken == "" || c.Access == "" {
 		return nil
 	}

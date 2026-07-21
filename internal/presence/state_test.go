@@ -64,7 +64,7 @@ func TestState_SeqStrictlyIncreases(t *testing.T) {
 	d2, _ := s.OnReport("playing", a, 2000)
 	a.Name = "third"
 	d3, _ := s.OnReport("playing", a, 3000)
-	if !(d1.Seq < d2.Seq && d2.Seq < d3.Seq) {
+	if d1.Seq >= d2.Seq || d2.Seq >= d3.Seq {
 		t.Fatalf("seq not strictly increasing: %d %d %d", d1.Seq, d2.Seq, d3.Seq)
 	}
 }

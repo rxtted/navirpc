@@ -20,6 +20,7 @@ func (f *fakePub) Publish(_ string, d Desired, sessionToken string, c Creds) (st
 	f.gotCreds = append(f.gotCreds, c)
 	return f.session, f.err
 }
+
 func (f *fakePub) Clear(_, sessionToken string, c Creds) error {
 	f.cleared = append(f.cleared, sessionToken)
 	f.gotCreds = append(f.gotCreds, c)
@@ -123,7 +124,7 @@ func TestReconcile_ThrottlesBurst(t *testing.T) {
 	pub := &fakePub{session: "s"}
 	ps := PubState{}
 	var seq int64
-	for i := 0; i < rateMax; i++ {
+	for range rateMax {
 		seq++
 		ps, _ = Reconcile("u", Desired{Seq: seq, Kind: "play"}, ps, pub, Creds{}, 1000)
 	}
@@ -141,7 +142,7 @@ func TestReconcile_ThrottlesBurst(t *testing.T) {
 		t.Fatalf("clear should be exempt from the throttle: %+v", pub.cleared)
 	}
 	seq++
-	Reconcile("u", Desired{Seq: seq, Kind: "play"}, ps, pub, Creds{}, 1000+rateWindowMs+1)
+	_, _ = Reconcile("u", Desired{Seq: seq, Kind: "play"}, ps, pub, Creds{}, 1000+rateWindowMs+1)
 	if len(pub.published) != rateMax+1 {
 		t.Fatalf("publishing resumes after the window ages out: %d", len(pub.published))
 	}
@@ -170,7 +171,7 @@ func TestReconcile_SkipsDuringBackoff(t *testing.T) {
 
 func TestReconcile_ClearBypassesBackoff(t *testing.T) {
 	pub := &fakePub{}
-	Reconcile("u", Desired{Seq: 6, Kind: "clear"}, PubState{PublishedSeq: 5, SessionToken: "sess", BackoffUntil: 9000}, pub, Creds{}, 1000)
+	_, _ = Reconcile("u", Desired{Seq: 6, Kind: "clear"}, PubState{PublishedSeq: 5, SessionToken: "sess", BackoffUntil: 9000}, pub, Creds{}, 1000)
 	if len(pub.cleared) != 1 {
 		t.Fatalf("a clear must bypass backoff and still attempt: %+v", pub.cleared)
 	}

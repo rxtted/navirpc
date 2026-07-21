@@ -34,7 +34,9 @@ func TestPublish_UpdateCarriesSessionToken(t *testing.T) {
 	f := &fakeDoer{resp: Response{StatusCode: 200, Body: []byte(`{"token":"sess2"}`)}}
 	got, _ := Publisher{D: f}.Publish("noah", presence.Desired{}, "sess1", creds())
 	var sent map[string]any
-	json.Unmarshal(f.got.Body, &sent)
+	if err := json.Unmarshal(f.got.Body, &sent); err != nil {
+		t.Fatalf("request body unparseable: %v", err)
+	}
 	if sent["token"] != "sess1" || got != "sess2" {
 		t.Fatalf("update carries held, adopts returned: sent=%v got=%q", sent["token"], got)
 	}
@@ -59,7 +61,8 @@ func TestPublish_RateLimitCarriesRetryAfter(t *testing.T) {
 
 func TestPublish_NonSuccessErrors(t *testing.T) {
 	f := &fakeDoer{resp: Response{StatusCode: 500}}
-	if _, err := (Publisher{D: f}.Publish("noah", presence.Desired{}, "", creds())); err == nil {
+	_, err := Publisher{D: f}.Publish("noah", presence.Desired{}, "", creds())
+	if err == nil {
 		t.Fatal("500 errors")
 	}
 }
@@ -74,7 +77,8 @@ func TestPublish_NoAccessTokenErrors(t *testing.T) {
 
 func TestClear_NoSessionIsNoop(t *testing.T) {
 	f := &fakeDoer{}
-	if err := (Publisher{D: f}.Clear("noah", "", creds())); err != nil || f.got.URL != "" {
+	err := Publisher{D: f}.Clear("noah", "", creds())
+	if err != nil || f.got.URL != "" {
 		t.Fatalf("no session, no call: err=%v url=%q", err, f.got.URL)
 	}
 }
