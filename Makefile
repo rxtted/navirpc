@@ -12,7 +12,16 @@ test:
 	go test ./internal/...
 
 setup:
-	git config core.hooksPath .githooks
+	@# git has one hooks slot and whoever writes it last wins, ask who is here
+	@# rather than grabbing it
+	@if command -v vox-engine >/dev/null 2>&1; then \
+		git config vox.projectHooks .githooks; \
+		if [ "$$(git config --local --get core.hooksPath)" = ".githooks" ]; then \
+			git config --unset core.hooksPath; \
+		fi; \
+	else \
+		git config core.hooksPath .githooks; \
+	fi
 
 hygiene:
 	@stray=$$(find . -name '*.go' -not -path './internal/*' -not -path './plugin/*' -not -path './.git/*'); \
