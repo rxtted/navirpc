@@ -2,6 +2,7 @@ package discord
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"atrophy/navirpc/internal/auth"
@@ -44,5 +45,24 @@ func TestRefresh_TransportErrorPropagates(t *testing.T) {
 	_, _, _, err := Refresher{D: f}.Refresh("app1", "rt1")
 	if err == nil {
 		t.Fatal("transport failure surfaces")
+	}
+}
+
+func TestRefresh_Other400IsTransient(t *testing.T) {
+	f := &fakeDoer{resp: Response{StatusCode: 400, Body: []byte(`{"error":"invalid_request"}`)}}
+	_, _, _, err := Refresher{D: f}.Refresh("app1", "rt1")
+	if err == nil || errors.Is(err, auth.ErrInvalidGrant) {
+		t.Fatalf("a non-grant 400 must not kill the token: %v", err)
+	}
+}
+
+func TestRefresh_Unparseable400IsTransient(t *testing.T) {
+	f := &fakeDoer{resp: Response{StatusCode: 400, Body: []byte(`cloudflare says no`)}}
+	_, _, _, err := Refresher{D: f}.Refresh("app1", "rt1")
+	if err == nil || errors.Is(err, auth.ErrInvalidGrant) {
+		t.Fatalf("ambiguity must not kill the token: %v", err)
+	}
+	if !strings.Contains(err.Error(), "cloudflare says no") {
+		t.Fatalf("the raw body rides in the error: %v", err)
 	}
 }
