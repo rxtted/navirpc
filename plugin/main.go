@@ -4,6 +4,7 @@ package main
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	"atrophy/navirpc/internal/art"
@@ -70,7 +71,9 @@ func findUser(username string) (userConfig, bool) {
 func (plugin) OnInit() error {
 	store := kvStore{}
 	nowMs := time.Now().UnixMilli()
+	configured := map[string]bool{}
 	for _, u := range readUsers() {
+		configured[u.Username] = true
 		// an own-app token carries its own client_id and wins, else the central app
 		seed, clientID := authFrom(u.Token)
 		if clientID == "" {
@@ -101,10 +104,48 @@ func (plugin) OnInit() error {
 			saveSnapshot(u.Username, st)
 		}
 	}
+	retireAbsent(configured)
 	if _, err := host.SchedulerScheduleRecurring(tickCron, "", "keepalive"); err != nil {
 		pdk.Log(pdk.LogWarn, "navirpc: scheduler register failed: "+err.Error())
 	}
 	return nil
+}
+
+// pulling someone out of the config should stop their presence, and until this existed it
+// didnt, their stored token just kept broadcasting. nothing ever ticks an unconfigured user
+// so the armed clear cant reach them, removal is the one path that deletes inline
+func retireAbsent(configured map[string]bool) {
+	keys, err := host.KVStoreList("presence:")
+	if err != nil {
+		return
+	}
+	for _, k := range keys {
+		user := strings.TrimPrefix(k, "presence:")
+		if configured[user] {
+			continue
+		}
+		s, ok := kvStore{}.Load(user)
+		if !ok || s.Access == "" {
+			continue
+		}
+		if ps := loadPresence(user); ps.SessionToken != "" {
+			creds := presence.Creds{Access: s.Access, ClientID: s.ClientID}
+			if err := (discord.Publisher{D: hostDoer{}}).Clear(user, ps.SessionToken, creds); err != nil {
+				pdk.Log(pdk.LogWarn, "navirpc: could not clear the card for retired user "+user+": "+err.Error())
+			}
+		}
+	}
+	for _, prefix := range []string{"token:", "playback:", "presence:"} {
+		keys, err := host.KVStoreList(prefix)
+		if err != nil {
+			continue
+		}
+		for _, k := range keys {
+			if !configured[strings.TrimPrefix(k, prefix)] {
+				_ = host.KVStoreDelete(k)
+			}
+		}
+	}
 }
 
 // the token field is a raw refresh token or the connect page's auth unit {token, client_id}.
@@ -128,7 +169,10 @@ func (plugin) PlaybackReport(r scrobbler.PlaybackReportRequest) error {
 	var desired presence.Desired
 	switch r.State {
 	case "playing", "starting":
-		u, _ := findUser(r.Username)
+		u, ok := findUser(r.Username)
+		if !ok {
+			return nil // gone from config, the authorization gate catches this first, belt and braces
+		}
 		l := parseLook(r.Username, u.Config)
 		tk := track(r)
 		act := presence.Map(tk, l.Prefs(), r.PositionMs, nowMs)
@@ -238,6 +282,9 @@ func configuredArtProviders() []art.ProviderConfig {
 }
 
 func (plugin) IsAuthorized(r scrobbler.IsAuthorizedRequest) (bool, error) {
+	if _, ok := findUser(r.Username); !ok {
+		return false, nil
+	}
 	s, ok := kvStore{}.Load(r.Username)
 	return ok && !s.Dead && s.Refresh != "", nil
 }
