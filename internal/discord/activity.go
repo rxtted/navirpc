@@ -11,15 +11,15 @@ type wireActivity struct {
 	DetailsURL        string          `json:"details_url,omitempty"`
 	State             string          `json:"state,omitempty"`
 	StateURL          string          `json:"state_url,omitempty"`
-	StatusDisplayType int             `json:"status_display_type,omitempty"`
-	Timestamps        *wireTimestamps `json:"timestamps,omitempty"`
-	Assets            *wireAssets     `json:"assets,omitempty"`
+	StatusDisplayType int             `json:"status_display_type,omitzero"`
+	Timestamps        *wireTimestamps `json:"timestamps,omitzero"`
+	Assets            *wireAssets     `json:"assets,omitzero"`
 	Buttons           []wireButton    `json:"buttons,omitempty"`
 }
 
 type wireTimestamps struct {
-	Start int64 `json:"start,omitempty"`
-	End   int64 `json:"end,omitempty"`
+	Start int64 `json:"start,omitzero"`
+	End   int64 `json:"end,omitzero"`
 }
 
 type wireAssets struct {
