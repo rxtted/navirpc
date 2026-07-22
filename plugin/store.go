@@ -8,6 +8,7 @@ import (
 	"atrophy/navirpc/internal/auth"
 	"atrophy/navirpc/internal/presence"
 	"github.com/navidrome/navidrome/plugins/pdk/go/host"
+	"github.com/navidrome/navidrome/plugins/pdk/go/pdk"
 )
 
 // kvStore adapts navidrome's kv-store to auth.TokenStore, keyed per navidrome user.
@@ -53,9 +54,15 @@ func loadSnapshot(username string) playbackState {
 	return st
 }
 
+// a failed save here loses desired state, and a failed presence save can lose the live session.
+// nothing can retry these
 func saveSnapshot(username string, st playbackState) {
-	if b, err := json.Marshal(st); err == nil {
-		_ = host.KVStoreSet("playback:"+username, b)
+	b, err := json.Marshal(st)
+	if err == nil {
+		err = host.KVStoreSet("playback:"+username, b)
+	}
+	if err != nil {
+		pdk.Log(pdk.LogWarn, "navirpc: could not persist playback for "+username+": "+err.Error())
 	}
 }
 
@@ -76,7 +83,11 @@ func loadPresence(username string) presence.PubState {
 }
 
 func savePresence(username string, ps presence.PubState) {
-	if b, err := json.Marshal(ps); err == nil {
-		_ = host.KVStoreSet("presence:"+username, b)
+	b, err := json.Marshal(ps)
+	if err == nil {
+		err = host.KVStoreSet("presence:"+username, b)
+	}
+	if err != nil {
+		pdk.Log(pdk.LogWarn, "navirpc: could not persist presence for "+username+": "+err.Error())
 	}
 }
